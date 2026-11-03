@@ -1,0 +1,1597 @@
+   0.033014440s  INFO prepare_target{force=false package_id=cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty) target="cisco-terminal"}: cargo::core::compiler::fingerprint: fingerprint error for cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty)/Check { test: false }/TargetInner { name: "cisco-terminal", doc: true, ..: with_path("/home/hu000001/github/behe-vty/src/main.rs", Edition2021) }
+   0.033030560s  INFO prepare_target{force=false package_id=cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty) target="cisco-terminal"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/cisco-terminal-6bdc0555000f0292/bin-cisco-terminal`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  17: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  18: <unknown>
+   0.082841314s  INFO prepare_target{force=false package_id=cursive v0.20.0 target="cursive"}: cargo::core::compiler::fingerprint: fingerprint error for cursive v0.20.0/Check { test: false }/TargetInner { ..: lib_target("cursive", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cursive-0.20.0/src/lib.rs", Edition2021) }
+   0.082854629s  INFO prepare_target{force=false package_id=cursive v0.20.0 target="cursive"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/cursive-2eac1b9a243d05e0/lib-cursive`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  18: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  19: <unknown>
+   0.083103777s  INFO prepare_target{force=false package_id=ahash v0.8.12 target="ahash"}: cargo::core::compiler::fingerprint: fingerprint error for ahash v0.8.12/Check { test: false }/TargetInner { ..: lib_target("ahash", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ahash-0.8.12/src/lib.rs", Edition2018) }
+   0.083110660s  INFO prepare_target{force=false package_id=ahash v0.8.12 target="ahash"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/ahash-fca91a9893132acb/lib-ahash`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.083436253s  INFO prepare_target{force=false package_id=cfg-if v1.0.0 target="cfg_if"}: cargo::core::compiler::fingerprint: fingerprint error for cfg-if v1.0.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("cfg_if", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cfg-if-1.0.0/src/lib.rs", Edition2018) }
+   0.083443787s  INFO prepare_target{force=false package_id=cfg-if v1.0.0 target="cfg_if"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/cfg-if-67915a4c513b0f2a/lib-cfg_if`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.083542202s  INFO prepare_target{force=false package_id=getrandom v0.3.3 target="getrandom"}: cargo::core::compiler::fingerprint: fingerprint error for getrandom v0.3.3/Check { test: false }/TargetInner { ..: lib_target("getrandom", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/getrandom-0.3.3/src/lib.rs", Edition2021) }
+   0.083548494s  INFO prepare_target{force=false package_id=getrandom v0.3.3 target="getrandom"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/getrandom-2de5c86232e7a1e2/lib-getrandom`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.083821838s  INFO prepare_target{force=false package_id=libc v0.2.172 target="libc"}: cargo::core::compiler::fingerprint: fingerprint error for libc v0.2.172/Check { test: false }/TargetInner { ..: lib_target("libc", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/libc-0.2.172/src/lib.rs", Edition2021) }
+   0.083828330s  INFO prepare_target{force=false package_id=libc v0.2.172 target="libc"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/libc-bbd5728cc2fe0a42/lib-libc`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.084054415s  INFO prepare_target{force=false package_id=once_cell v1.21.3 target="once_cell"}: cargo::core::compiler::fingerprint: fingerprint error for once_cell v1.21.3/Check { test: false }/TargetInner { ..: lib_target("once_cell", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/once_cell-1.21.3/src/lib.rs", Edition2021) }
+   0.084060707s  INFO prepare_target{force=false package_id=once_cell v1.21.3 target="once_cell"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/once_cell-92af59a5e48bb55f/lib-once_cell`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.084173689s  INFO prepare_target{force=false package_id=zerocopy v0.8.25 target="zerocopy"}: cargo::core::compiler::fingerprint: fingerprint error for zerocopy v0.8.25/Check { test: false }/TargetInner { ..: lib_target("zerocopy", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zerocopy-0.8.25/src/lib.rs", Edition2021) }
+   0.084179560s  INFO prepare_target{force=false package_id=zerocopy v0.8.25 target="zerocopy"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/zerocopy-4c72f2256a4c8994/lib-zerocopy`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.084406667s  INFO prepare_target{force=false package_id=crossbeam-channel v0.5.15 target="crossbeam_channel"}: cargo::core::compiler::fingerprint: fingerprint error for crossbeam-channel v0.5.15/Check { test: false }/TargetInner { ..: lib_target("crossbeam_channel", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-channel-0.5.15/src/lib.rs", Edition2021) }
+   0.084412939s  INFO prepare_target{force=false package_id=crossbeam-channel v0.5.15 target="crossbeam_channel"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/crossbeam-channel-83cc9938fab5e518/lib-crossbeam_channel`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.084544046s  INFO prepare_target{force=false package_id=crossbeam-utils v0.8.21 target="crossbeam_utils"}: cargo::core::compiler::fingerprint: fingerprint error for crossbeam-utils v0.8.21/Check { test: false }/TargetInner { ..: lib_target("crossbeam_utils", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/crossbeam-utils-0.8.21/src/lib.rs", Edition2021) }
+   0.084550107s  INFO prepare_target{force=false package_id=crossbeam-utils v0.8.21 target="crossbeam_utils"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/crossbeam-utils-8e8ddd5b144443f6/lib-crossbeam_utils`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.084767195s  INFO prepare_target{force=false package_id=cursive_core v0.3.7 target="cursive_core"}: cargo::core::compiler::fingerprint: fingerprint error for cursive_core v0.3.7/Check { test: false }/TargetInner { ..: lib_target("cursive_core", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/cursive_core-0.3.7/src/lib.rs", Edition2021) }
+   0.084773978s  INFO prepare_target{force=false package_id=cursive_core v0.3.7 target="cursive_core"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/cursive_core-e1aedf0ce4804afe/lib-cursive_core`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.085035710s  INFO prepare_target{force=false package_id=enum-map v2.7.3 target="enum_map"}: cargo::core::compiler::fingerprint: fingerprint error for enum-map v2.7.3/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("enum_map", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/enum-map-2.7.3/src/lib.rs", Edition2021) }
+   0.085042753s  INFO prepare_target{force=false package_id=enum-map v2.7.3 target="enum_map"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/enum-map-1a43c10faac62abe/lib-enum_map`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.085476729s  INFO prepare_target{force=false package_id=enumset v1.1.6 target="enumset"}: cargo::core::compiler::fingerprint: fingerprint error for enumset v1.1.6/Check { test: false }/TargetInner { ..: lib_target("enumset", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/enumset-1.1.6/src/lib.rs", Edition2021) }
+   0.085482961s  INFO prepare_target{force=false package_id=enumset v1.1.6 target="enumset"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/enumset-864ddcfcc5e187bd/lib-enumset`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.085959698s  INFO prepare_target{force=false package_id=lazy_static v1.5.0 target="lazy_static"}: cargo::core::compiler::fingerprint: fingerprint error for lazy_static v1.5.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("lazy_static", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lazy_static-1.5.0/src/lib.rs", Edition2015) }
+   0.085967272s  INFO prepare_target{force=false package_id=lazy_static v1.5.0 target="lazy_static"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/lazy_static-de8f2e2842e8d7df/lib-lazy_static`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.086066739s  INFO prepare_target{force=false package_id=log v0.4.27 target="log"}: cargo::core::compiler::fingerprint: fingerprint error for log v0.4.27/Check { test: false }/TargetInner { ..: lib_target("log", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/log-0.4.27/src/lib.rs", Edition2021) }
+   0.086072510s  INFO prepare_target{force=false package_id=log v0.4.27 target="log"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/log-2db2979d0489b380/lib-log`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.086183799s  INFO prepare_target{force=false package_id=num v0.4.3 target="num"}: cargo::core::compiler::fingerprint: fingerprint error for num v0.4.3/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-0.4.3/src/lib.rs", Edition2021) }
+   0.086189470s  INFO prepare_target{force=false package_id=num v0.4.3 target="num"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-3543e37c1f8e4882/lib-num`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.086325946s  INFO prepare_target{force=false package_id=num-complex v0.4.6 target="num_complex"}: cargo::core::compiler::fingerprint: fingerprint error for num-complex v0.4.6/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_complex", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-complex-0.4.6/src/lib.rs", Edition2021) }
+   0.086331807s  INFO prepare_target{force=false package_id=num-complex v0.4.6 target="num_complex"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-complex-a8151ab753b39f40/lib-num_complex`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.086482370s  INFO prepare_target{force=false package_id=num-traits v0.2.19 target="num_traits"}: cargo::core::compiler::fingerprint: fingerprint error for num-traits v0.2.19/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_traits", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-traits-0.2.19/src/lib.rs", Edition2021) }
+   0.086491357s  INFO prepare_target{force=false package_id=num-traits v0.2.19 target="num_traits"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-traits-ce26d80d77d7da66/lib-num_traits`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: <unknown>
+  21: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  22: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  23: <unknown>
+   0.086727371s  INFO prepare_target{force=false package_id=num-integer v0.1.46 target="num_integer"}: cargo::core::compiler::fingerprint: fingerprint error for num-integer v0.1.46/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_integer", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-integer-0.1.46/src/lib.rs", Edition2018) }
+   0.086733743s  INFO prepare_target{force=false package_id=num-integer v0.1.46 target="num_integer"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-integer-07162290b7570c57/lib-num_integer`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.086858498s  INFO prepare_target{force=false package_id=num-iter v0.1.45 target="num_iter"}: cargo::core::compiler::fingerprint: fingerprint error for num-iter v0.1.45/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_iter", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-iter-0.1.45/src/lib.rs", Edition2018) }
+   0.086864840s  INFO prepare_target{force=false package_id=num-iter v0.1.45 target="num_iter"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-iter-dfc0737e194ce6ca/lib-num_iter`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.086981699s  INFO prepare_target{force=false package_id=num-rational v0.4.2 target="num_rational"}: cargo::core::compiler::fingerprint: fingerprint error for num-rational v0.4.2/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_rational", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-rational-0.4.2/src/lib.rs", Edition2021) }
+   0.086987691s  INFO prepare_target{force=false package_id=num-rational v0.4.2 target="num_rational"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-rational-d1023825bea74bfb/lib-num_rational`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.087105382s  INFO prepare_target{force=false package_id=owning_ref v0.4.1 target="owning_ref"}: cargo::core::compiler::fingerprint: fingerprint error for owning_ref v0.4.1/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("owning_ref", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/owning_ref-0.4.1/src/lib.rs", Edition2015) }
+   0.087111173s  INFO prepare_target{force=false package_id=owning_ref v0.4.1 target="owning_ref"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/owning_ref-5d7447266ad6b8c2/lib-owning_ref`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.087204518s  INFO prepare_target{force=false package_id=stable_deref_trait v1.2.0 target="stable_deref_trait"}: cargo::core::compiler::fingerprint: fingerprint error for stable_deref_trait v1.2.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("stable_deref_trait", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/stable_deref_trait-1.2.0/src/lib.rs", Edition2015) }
+   0.087210349s  INFO prepare_target{force=false package_id=stable_deref_trait v1.2.0 target="stable_deref_trait"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/stable_deref_trait-9f0662aee1c9b382/lib-stable_deref_trait`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.087300769s  INFO prepare_target{force=false package_id=time v0.3.41 target="time"}: cargo::core::compiler::fingerprint: fingerprint error for time v0.3.41/Check { test: false }/TargetInner { benched: false, ..: lib_target("time", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/time-0.3.41/src/lib.rs", Edition2021) }
+   0.087306380s  INFO prepare_target{force=false package_id=time v0.3.41 target="time"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/time-41a57c1803f0e47b/lib-time`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.087496177s  INFO prepare_target{force=false package_id=deranged v0.4.0 target="deranged"}: cargo::core::compiler::fingerprint: fingerprint error for deranged v0.4.0/Check { test: false }/TargetInner { ..: lib_target("deranged", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/deranged-0.4.0/src/lib.rs", Edition2021) }
+   0.087502088s  INFO prepare_target{force=false package_id=deranged v0.4.0 target="deranged"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/deranged-4886d704b3ec1d9b/lib-deranged`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.087633896s  INFO prepare_target{force=false package_id=powerfmt v0.2.0 target="powerfmt"}: cargo::core::compiler::fingerprint: fingerprint error for powerfmt v0.2.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("powerfmt", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/powerfmt-0.2.0/src/lib.rs", Edition2021) }
+   0.087639697s  INFO prepare_target{force=false package_id=powerfmt v0.2.0 target="powerfmt"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/powerfmt-84b31dab5de0d560/lib-powerfmt`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: <unknown>
+  21: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  22: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  23: <unknown>
+   0.087733653s  INFO prepare_target{force=false package_id=itoa v1.0.15 target="itoa"}: cargo::core::compiler::fingerprint: fingerprint error for itoa v1.0.15/Check { test: false }/TargetInner { ..: lib_target("itoa", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/itoa-1.0.15/src/lib.rs", Edition2018) }
+   0.087743752s  INFO prepare_target{force=false package_id=itoa v1.0.15 target="itoa"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/itoa-949b5b5bc5a41eb3/lib-itoa`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.087849331s  INFO prepare_target{force=false package_id=num-conv v0.1.0 target="num_conv"}: cargo::core::compiler::fingerprint: fingerprint error for num-conv v0.1.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_conv", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num-conv-0.1.0/src/lib.rs", Edition2021) }
+   0.087855222s  INFO prepare_target{force=false package_id=num-conv v0.1.0 target="num_conv"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num-conv-3621ee00fc64a51b/lib-num_conv`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.087970839s  INFO prepare_target{force=false package_id=num_threads v0.1.7 target="num_threads"}: cargo::core::compiler::fingerprint: fingerprint error for num_threads v0.1.7/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("num_threads", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/num_threads-0.1.7/src/lib.rs", Edition2015) }
+   0.087977512s  INFO prepare_target{force=false package_id=num_threads v0.1.7 target="num_threads"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/num_threads-c8729085248ff45a/lib-num_threads`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.088079975s  INFO prepare_target{force=false package_id=time-core v0.1.4 target="time_core"}: cargo::core::compiler::fingerprint: fingerprint error for time-core v0.1.4/Check { test: false }/TargetInner { ..: lib_target("time_core", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/time-core-0.1.4/src/lib.rs", Edition2021) }
+   0.088085655s  INFO prepare_target{force=false package_id=time-core v0.1.4 target="time_core"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/time-core-273ac26af4a4b3cd/lib-time_core`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.088211652s  INFO prepare_target{force=false package_id=toml v0.5.11 target="toml"}: cargo::core::compiler::fingerprint: fingerprint error for toml v0.5.11/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("toml", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/toml-0.5.11/src/lib.rs", Edition2018) }
+   0.088217573s  INFO prepare_target{force=false package_id=toml v0.5.11 target="toml"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/toml-45fe1dfb810771ac/lib-toml`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.088331167s  INFO prepare_target{force=false package_id=serde v1.0.219 target="serde"}: cargo::core::compiler::fingerprint: fingerprint error for serde v1.0.219/Check { test: false }/TargetInner { ..: lib_target("serde", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.219/src/lib.rs", Edition2018) }
+   0.088336657s  INFO prepare_target{force=false package_id=serde v1.0.219 target="serde"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/serde-96d49416efc823f9/lib-serde`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.088545871s  INFO prepare_target{force=false package_id=unicode-segmentation v1.12.0 target="unicode_segmentation"}: cargo::core::compiler::fingerprint: fingerprint error for unicode-segmentation v1.12.0/Check { test: false }/TargetInner { ..: lib_target("unicode_segmentation", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-segmentation-1.12.0/src/lib.rs", Edition2018) }
+   0.088552363s  INFO prepare_target{force=false package_id=unicode-segmentation v1.12.0 target="unicode_segmentation"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/unicode-segmentation-7d05b0f202d502c6/lib-unicode_segmentation`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.088650357s  INFO prepare_target{force=false package_id=unicode-width v0.1.14 target="unicode_width"}: cargo::core::compiler::fingerprint: fingerprint error for unicode-width v0.1.14/Check { test: false }/TargetInner { ..: lib_target("unicode_width", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/unicode-width-0.1.14/src/lib.rs", Edition2021) }
+   0.088656168s  INFO prepare_target{force=false package_id=unicode-width v0.1.14 target="unicode_width"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/unicode-width-d7db31b2d8324fa6/lib-unicode_width`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.088759242s  INFO prepare_target{force=false package_id=xi-unicode v0.3.0 target="xi_unicode"}: cargo::core::compiler::fingerprint: fingerprint error for xi-unicode v0.3.0/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("xi_unicode", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/xi-unicode-0.3.0/src/lib.rs", Edition2018) }
+   0.088765163s  INFO prepare_target{force=false package_id=xi-unicode v0.3.0 target="xi_unicode"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/xi-unicode-d8b0cecd05ab542c/lib-xi_unicode`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.088875981s  INFO prepare_target{force=false package_id=maplit v1.0.2 target="maplit"}: cargo::core::compiler::fingerprint: fingerprint error for maplit v1.0.2/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("maplit", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/maplit-1.0.2/src/lib.rs", Edition2015) }
+   0.088881963s  INFO prepare_target{force=false package_id=maplit v1.0.2 target="maplit"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/maplit-2da838858f81fe4f/lib-maplit`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.088974066s  INFO prepare_target{force=false package_id=ncurses v5.101.0 target="ncurses"}: cargo::core::compiler::fingerprint: fingerprint error for ncurses v5.101.0/Check { test: false }/TargetInner { ..: lib_target("ncurses", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/ncurses-5.101.0/src/lib.rs", Edition2015) }
+   0.088980468s  INFO prepare_target{force=false package_id=ncurses v5.101.0 target="ncurses"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/ncurses-39876d24cc152e3d/lib-ncurses`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.089309727s  INFO prepare_target{force=false package_id=signal-hook v0.3.18 target="signal_hook"}: cargo::core::compiler::fingerprint: fingerprint error for signal-hook v0.3.18/Check { test: false }/TargetInner { ..: lib_target("signal_hook", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-0.3.18/src/lib.rs", Edition2018) }
+   0.089316069s  INFO prepare_target{force=false package_id=signal-hook v0.3.18 target="signal_hook"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/signal-hook-c9dac800edf4ed0d/lib-signal_hook`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.089537245s  INFO prepare_target{force=false package_id=signal-hook-registry v1.4.5 target="signal_hook_registry"}: cargo::core::compiler::fingerprint: fingerprint error for signal-hook-registry v1.4.5/Check { test: false }/TargetInner { ..: lib_target("signal_hook_registry", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.5/src/lib.rs", Edition2015) }
+   0.089543707s  INFO prepare_target{force=false package_id=signal-hook-registry v1.4.5 target="signal_hook_registry"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/signal-hook-registry-aa7a74610e744147/lib-signal_hook_registry`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.089646721s  INFO prepare_target{force=false package_id=term_size v0.3.2 target="term_size"}: cargo::core::compiler::fingerprint: fingerprint error for term_size v0.3.2/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("term_size", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/term_size-0.3.2/src/lib.rs", Edition2015) }
+   0.089652672s  INFO prepare_target{force=false package_id=term_size v0.3.2 target="term_size"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/term_size-90ecca22dad09134/lib-term_size`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.089764702s  INFO prepare_target{force=false package_id=env_logger v0.9.3 target="env_logger"}: cargo::core::compiler::fingerprint: fingerprint error for env_logger v0.9.3/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("env_logger", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/env_logger-0.9.3/src/lib.rs", Edition2018) }
+   0.089770654s  INFO prepare_target{force=false package_id=env_logger v0.9.3 target="env_logger"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/env_logger-45c96ff53ecf7ee0/lib-env_logger`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  18: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  19: <unknown>
+   0.089936155s  INFO prepare_target{force=false package_id=atty v0.2.14 target="atty"}: cargo::core::compiler::fingerprint: fingerprint error for atty v0.2.14/Check { test: false }/TargetInner { name_inferred: true, ..: lib_target("atty", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/atty-0.2.14/src/lib.rs", Edition2015) }
+   0.089942176s  INFO prepare_target{force=false package_id=atty v0.2.14 target="atty"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/atty-11fe3ec73bc544c9/lib-atty`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.090049738s  INFO prepare_target{force=false package_id=humantime v2.2.0 target="humantime"}: cargo::core::compiler::fingerprint: fingerprint error for humantime v2.2.0/Check { test: false }/TargetInner { ..: lib_target("humantime", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/humantime-2.2.0/src/lib.rs", Edition2021) }
+   0.090055429s  INFO prepare_target{force=false package_id=humantime v2.2.0 target="humantime"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/humantime-8a32908202acb958/lib-humantime`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.090147643s  INFO prepare_target{force=false package_id=regex v1.11.1 target="regex"}: cargo::core::compiler::fingerprint: fingerprint error for regex v1.11.1/Check { test: false }/TargetInner { ..: lib_target("regex", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/regex-1.11.1/src/lib.rs", Edition2021) }
+   0.090153093s  INFO prepare_target{force=false package_id=regex v1.11.1 target="regex"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/regex-26d5031a0f9ee6c4/lib-regex`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.090301562s  INFO prepare_target{force=false package_id=aho-corasick v1.1.3 target="aho_corasick"}: cargo::core::compiler::fingerprint: fingerprint error for aho-corasick v1.1.3/Check { test: false }/TargetInner { ..: lib_target("aho_corasick", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/aho-corasick-1.1.3/src/lib.rs", Edition2021) }
+   0.090307303s  INFO prepare_target{force=false package_id=aho-corasick v1.1.3 target="aho_corasick"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/aho-corasick-550b65007bcb81de/lib-aho_corasick`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.090411268s  INFO prepare_target{force=false package_id=memchr v2.7.4 target="memchr"}: cargo::core::compiler::fingerprint: fingerprint error for memchr v2.7.4/Check { test: false }/TargetInner { benched: false, ..: lib_target("memchr", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/memchr-2.7.4/src/lib.rs", Edition2021) }
+   0.090419213s  INFO prepare_target{force=false package_id=memchr v2.7.4 target="memchr"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/memchr-5e6654f3d0745ccc/lib-memchr`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.090519883s  INFO prepare_target{force=false package_id=regex-automata v0.4.9 target="regex_automata"}: cargo::core::compiler::fingerprint: fingerprint error for regex-automata v0.4.9/Check { test: false }/TargetInner { benched: false, ..: lib_target("regex_automata", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/regex-automata-0.4.9/src/lib.rs", Edition2021) }
+   0.090525553s  INFO prepare_target{force=false package_id=regex-automata v0.4.9 target="regex_automata"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/regex-automata-e16566104d19fe4f/lib-regex_automata`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  20: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  21: <unknown>
+   0.090666528s  INFO prepare_target{force=false package_id=regex-syntax v0.8.5 target="regex_syntax"}: cargo::core::compiler::fingerprint: fingerprint error for regex-syntax v0.8.5/Check { test: false }/TargetInner { ..: lib_target("regex_syntax", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/regex-syntax-0.8.5/src/lib.rs", Edition2021) }
+   0.090672269s  INFO prepare_target{force=false package_id=regex-syntax v0.8.5 target="regex_syntax"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/regex-syntax-2935557cc923e984/lib-regex_syntax`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: <unknown>
+  19: <unknown>
+  20: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  21: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  22: <unknown>
+   0.090768580s  INFO prepare_target{force=false package_id=termcolor v1.4.1 target="termcolor"}: cargo::core::compiler::fingerprint: fingerprint error for termcolor v1.4.1/Check { test: false }/TargetInner { benched: false, ..: lib_target("termcolor", ["lib"], "/home/hu000001/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/termcolor-1.4.1/src/lib.rs", Edition2018) }
+   0.090774311s  INFO prepare_target{force=false package_id=termcolor v1.4.1 target="termcolor"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/termcolor-f6b4bdd006c387ae/lib-termcolor`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: <unknown>
+  17: <unknown>
+  18: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  19: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  20: <unknown>
+   0.090901450s  INFO prepare_target{force=false package_id=cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty) target="cisco-terminal"}: cargo::core::compiler::fingerprint: fingerprint error for cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty)/Check { test: true }/TargetInner { name: "cisco-terminal", doc: true, ..: with_path("/home/hu000001/github/behe-vty/src/main.rs", Edition2021) }
+   0.090907812s  INFO prepare_target{force=false package_id=cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty) target="cisco-terminal"}: cargo::core::compiler::fingerprint:     err: failed to read `/home/hu000001/github/behe-vty/target/debug/.fingerprint/cisco-terminal-4345d387028ffcad/test-bin-cisco-terminal`
+
+Caused by:
+    No such file or directory (os error 2)
+
+Stack backtrace:
+   0: <unknown>
+   1: <unknown>
+   2: <unknown>
+   3: <unknown>
+   4: <unknown>
+   5: <unknown>
+   6: <unknown>
+   7: <unknown>
+   8: <unknown>
+   9: <unknown>
+  10: <unknown>
+  11: <unknown>
+  12: <unknown>
+  13: <unknown>
+  14: <unknown>
+  15: <unknown>
+  16: __libc_start_call_main
+             at ./csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+  17: __libc_start_main_impl
+             at ./csu/../csu/libc-start.c:360:3
+  18: <unknown>
+    Checking powerfmt v0.2.0
+    Checking memchr v2.7.4
+    Checking cfg-if v1.0.0
+    Checking regex-syntax v0.8.5
+    Checking itoa v1.0.15
+    Checking libc v0.2.172
+    Checking num_threads v0.1.7
+    Checking log v0.4.27
+    Checking stable_deref_trait v1.2.0
+    Checking time-core v0.1.4
+    Checking once_cell v1.21.3
+    Checking num-conv v0.1.0
+    Checking unicode-segmentation v1.12.0
+    Checking unicode-width v0.1.14
+    Checking lazy_static v1.5.0
+    Checking xi-unicode v0.3.0
+    Checking termcolor v1.4.1
+    Checking maplit v1.0.2
+    Checking humantime v2.2.0
+    Checking serde v1.0.219
+    Checking zerocopy v0.8.25
+    Checking crossbeam-utils v0.8.21
+    Checking num-traits v0.2.19
+    Checking enum-map v2.7.3
+    Checking enumset v1.1.6
+    Checking owning_ref v0.4.1
+    Checking deranged v0.4.0
+    Checking crossbeam-channel v0.5.15
+    Checking aho-corasick v1.1.3
+    Checking getrandom v0.3.3
+    Checking signal-hook-registry v1.4.5
+    Checking atty v0.2.14
+    Checking ncurses v5.101.0
+    Checking term_size v0.3.2
+    Checking signal-hook v0.3.18
+    Checking num-integer v0.1.46
+    Checking num-complex v0.4.6
+    Checking time v0.3.41
+    Checking num-iter v0.1.45
+    Checking num-rational v0.4.2
+    Checking num v0.4.3
+    Checking regex-automata v0.4.9
+    Checking ahash v0.8.12
+    Checking toml v0.5.11
+    Checking regex v1.11.1
+    Checking cursive_core v0.3.7
+    Checking env_logger v0.9.3
+    Checking cursive v0.20.0
+    Checking cisco-terminal v0.1.0 (/home/hu000001/github/behe-vty)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.16s
