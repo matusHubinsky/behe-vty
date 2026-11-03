@@ -1,3 +1,17 @@
+// Copyright (c) 2026 - Matus Hubinsky
+
+// Licensed under the EUPL-1.2-only
+// You may not use this work except in compliance with the Licence.
+// You may obtain a copy of the Licence at:
+
+// https://joinup.ec.europa.eu/software/page/eupl
+
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the Licence is distributed on an "AS IS" basis,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the Licence for the specific language governing permissions and
+// limitations under the Licence.
+
 use cursive::views::{TextView, EditView, LinearLayout, ResizedView, ScrollView, Dialog, PaddedView};
 use cursive::traits::*;
 use cursive::theme::{Color, ColorStyle, BaseColor};
@@ -137,7 +151,7 @@ pub fn run() {
 
     siv.add_layer(
         Dialog::around(ResizedView::with_fixed_size((80, 20), layout))
-            .title("Cisco Router Terminal")
+            .title("BEHE-VTY")
             .padding(Margins::lrtb(1, 1, 1, 1)),
     );
 
