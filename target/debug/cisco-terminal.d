@@ -1,0 +1,1 @@
+/home/hu000001/github/brutal-console-vty/target/debug/cisco-terminal: /home/hu000001/github/brutal-console-vty/src/cisco.rs /home/hu000001/github/brutal-console-vty/src/main.rs /home/hu000001/github/brutal-console-vty/src/tui.rs /home/hu000001/github/brutal-console-vty/theme.toml

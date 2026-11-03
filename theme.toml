@@ -1,0 +1,24 @@
+
+shadow = true
+borders = "simple"
+
+[colors]
+background = "#2a2a2a"        # Dark terminal background
+shadow     = ["#000000", "black"]
+view       = "#2a2a2a"        # Same dark background for views
+
+# Text colors
+primary   = "#FFFFFF"         # White for main text
+secondary = "#DDDDDD"         # Light gray for secondary text
+tertiary  = "#BBBBBB"
+
+title_primary   = "#8A2BE2"
+title_secondary = "#FFFFFF"
+
+highlight          = "#8A2BE2"
+highlight_inactive = "#5555FF"
+
+# This part ensures input and output fields use proper color styles
+[styles]
+TextView = "primary view"
+EditView = "primary view"
