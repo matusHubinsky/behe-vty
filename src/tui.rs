@@ -79,7 +79,7 @@ pub fn run() {
         end: false,
     }));
     
-    siv.load_toml(include_str!(".././theme.toml")).unwrap();
+    siv.load_toml(include_str!("../theme.toml")).unwrap();
 
     let output_buffer = Rc::new(RefCell::new(String::from("")));
     let history = Rc::new(RefCell::new(History::new()));

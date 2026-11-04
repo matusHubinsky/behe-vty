@@ -1,0 +1,52 @@
+user_exec:
+  - enable
+  - exit
+  - ping
+  - show version
+  - show clock
+  - show ip interface brief
+  - telnet
+  - ssh
+
+privileged_exec:
+  - configure terminal
+  - copy running-config startup-config
+  - disable
+  - exit
+  - ping
+  - reload
+  - show running-config
+  - show startup-config
+  - show version
+  - show ip route
+  - show ip interface brief
+  - show interfaces
+  - write memory
+
+global_config:
+  - hostname
+  - interface
+  - ip route
+  - line console 0
+  - line vty 0 4
+  - enable secret
+  - no
+  - exit
+  - end
+
+line_config:
+  - login
+  - password
+  - transport input telnet
+  - transport input ssh
+  - exec-timeout
+  - exit
+  - end
+
+interface_config:
+  - description
+  - ip address
+  - no shutdown
+  - shutdown
+  - exit
+  - end

@@ -18,11 +18,9 @@ pub enum CiscoTerminalMode {
     UserExec,
     PrivilegedExec,
     GlobalConfig,
-    LineConfig,
-    InterfaceConfig(String), // Associated data for interface ID
+    InterfaceConfig(String),
 }
 
-#[derive(Debug, PartialEq)]
 pub struct Terminal {
     pub mode: CiscoTerminalMode,
     pub prompt: String,
@@ -31,138 +29,608 @@ pub struct Terminal {
     pub end: bool,
 }
 
-pub fn switch_mode(mode: &CiscoTerminalMode) -> String {
-    match mode {
-        CiscoTerminalMode::UserExec => "router>".to_string(),
-        CiscoTerminalMode::PrivilegedExec => "router#".to_string(),
-        CiscoTerminalMode::GlobalConfig => "router(config)#".to_string(),
-        CiscoTerminalMode::LineConfig => "router(config-line)#".to_string(),
-        CiscoTerminalMode::InterfaceConfig(_interface) => "router(config-if)#".to_string(),
+pub fn switch_mode(mode: &CiscoTerminalMode) -> String { /* ... */ }
+pub fn terminal(term: &mut Terminal) { /* ... */ }
+use cursive::event::{Event, EventResult, Key};
+use cursive::theme::{
+    BaseColor, BorderStyle, Color, ColorStyle, Palette, PaletteColor, Theme as CursiveTheme,
+};
+use cursive::traits::*;
+use cursive::view::Margins;
+use cursive::views::{Dialog, LinearLayout, PaddedView, ResizedView, ScrollView, TextView};
+use cursive::{Cursive, CursiveExt, Printer, Vec2};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
+
+use crate::cisco;
+use crate::commands::CommandTree;
+use crate::storage::Storage;
+
+const INPUT_WIDTH: usize = 72;
+
+// ---------------------------------------------------------------- colour schemes
+
+#[derive(Clone, Copy)]
+struct Scheme {
+    name: &'static str,
+    bg: Color,
+    fg: Color,
+    prompt: Color,
+    ghost: Color,
+    input_bg: Color,
+    cursor: Color,
+}
+
+const SCHEMES: [Scheme; 4] = [
+    Scheme {
+        name: "Dark Purple",
+        bg: Color::Rgb(0x2a, 0x2a, 0x2a),
+        fg: Color::Rgb(0xee, 0xee, 0xee),
+        prompt: Color::Rgb(0x8a, 0x2b, 0xe2),
+        ghost: Color::Rgb(0x75, 0x75, 0x75),
+        input_bg: Color::Rgb(0x2a, 0x2a, 0x2a),
+        cursor: Color::Rgb(0xd0, 0xd0, 0xd0),
+    },
+    Scheme {
+        name: "Classic Green",
+        bg: Color::Rgb(0x00, 0x00, 0x00),
+        fg: Color::Rgb(0x33, 0xff, 0x33),
+        prompt: Color::Rgb(0x00, 0xcc, 0x00),
+        ghost: Color::Rgb(0x1f, 0x7a, 0x1f),
+        input_bg: Color::Rgb(0x00, 0x00, 0x00),
+        cursor: Color::Rgb(0x33, 0xff, 0x33),
+    },
+    Scheme {
+        name: "Amber",
+        bg: Color::Rgb(0x1a, 0x10, 0x00),
+        fg: Color::Rgb(0xff, 0xb0, 0x00),
+        prompt: Color::Rgb(0xff, 0x8c, 0x00),
+        ghost: Color::Rgb(0x8a, 0x60, 0x10),
+        input_bg: Color::Rgb(0x1a, 0x10, 0x00),
+        cursor: Color::Rgb(0xff, 0xb0, 0x00),
+    },
+    Scheme {
+        name: "Light",
+        bg: Color::Rgb(0xfa, 0xfa, 0xfa),
+        fg: Color::Rgb(0x22, 0x22, 0x22),
+        prompt: Color::Rgb(0x5b, 0x21, 0xb6),
+        ghost: Color::Rgb(0x9a, 0x9a, 0x9a),
+        input_bg: Color::Rgb(0xe8, 0xe8, 0xe8),
+        cursor: Color::Rgb(0x22, 0x22, 0x22),
+    },
+];
+
+fn cursive_theme(scheme: &Scheme) -> CursiveTheme {
+    let mut palette = Palette::default();
+    palette[PaletteColor::Background] = scheme.bg;
+    palette[PaletteColor::View] = scheme.bg;
+    palette[PaletteColor::Primary] = scheme.fg;
+    palette[PaletteColor::Secondary] = scheme.fg;
+    palette[PaletteColor::Tertiary] = scheme.fg;
+    palette[PaletteColor::TitlePrimary] = scheme.prompt;
+    palette[PaletteColor::TitleSecondary] = scheme.prompt;
+    palette[PaletteColor::Highlight] = scheme.prompt;
+    palette[PaletteColor::HighlightInactive] = scheme.ghost;
+    palette[PaletteColor::HighlightText] = scheme.bg;
+    palette[PaletteColor::Shadow] = scheme.bg;
+
+    CursiveTheme {
+        shadow: false,
+        borders: BorderStyle::Simple,
+        palette,
     }
 }
 
-// ----------------------------------------------------------------------
-// todo I need to determine what kind of code I am looking at.
-// terminal_change_mode
-// terminal_show
-// terminal_configure
-// terminal_security
-// terminal_administration
-// ----------------------------------------------------------------------
-// rename thins to parser
-// or some other fance way
-pub fn terminal(term: &mut Terminal) -> &mut Terminal {
-    term.output = term.input.clone();
-    term.end = false;
+/// Apply a scheme to the whole UI.
+fn apply_scheme(s: &mut Cursive, index: usize) {
+    let scheme = SCHEMES[index];
 
-    let mut valid = true;
+    s.set_theme(cursive_theme(&scheme));
 
-    match term.input.as_str() {
-        "show ip interface brief" => {
-            term.output = String::from(
-                "\nInterface\tIP-Address\tOK?\tMethod\tStatus\tProtocol\n\
-                Gig0/0\t192.168.1.1\tYES\tmanual\tup\tup\n\
-                Gig0/1\tunassigned\tNO\tunset\tdown\tdown",
-            );
+    s.call_on_name("terminal_output", |v: &mut TextView| {
+        v.set_style(ColorStyle::new(scheme.fg, scheme.bg));
+    });
+    s.call_on_name("prompt", |v: &mut TextView| {
+        v.set_style(ColorStyle::new(scheme.prompt, scheme.bg));
+    });
+}
+
+// ---------------------------------------------------------------- history
+
+struct History {
+    lines: Vec<String>,
+    index: usize,
+}
+
+impl History {
+    fn from_lines(lines: Vec<String>) -> Self {
+        let index = lines.len();
+        Self { lines, index }
+    }
+
+    fn add_line(&mut self, line: String) {
+        if !line.trim().is_empty() {
+            self.lines.push(line);
         }
-        "show version" => {
-            term.output = String::from(
-                "\nCisco IOS Software, C800 Software (C800-UNIVERSALK9-M), Version 15.5(3)M\n\
-                Technical Support: http://www.cisco.com/techsupport\n\
-                ROM: System Bootstrap, Version 12.4(22r)YB\n\
-                System image file is 'flash:c800-universalk9-mz.SPA.155-3.M.bin'\n\
-                Uptime is 3 weeks, 2 days, 5 hours, 22 minutes",
-            );
-        }
-        "show running-config" => {
-            term.output = String::from(
-                "\nBuilding configuration...\n\
-                Current configuration : 1024 bytes\n\
-                version 15.5\n\
-                hostname Router\n\
-                interface Gig0/0\n\
-                \tip address 192.168.1.1 255.255.255.0\n\
-                \tno shutdown\n\
-                interface Gig0/1\n\
-                \tshutdown\n\
-                line vty 0 4\n\
-                \tpassword cisco\n\
-                \tlogin",
-            );
-        }
-        "show interfaces" => {
-            term.output = String::from(
-                "\nGig0/0 is up, line protocol is up\n\
-                \tHardware is Gigabit Ethernet\n\
-                \tInternet address is 192.168.1.1/24\n\
-                \tMTU 1500 bytes, BW 1000000 Kbit/sec\n\
-                Gig0/1 is administratively down, line protocol is down\n\
-                \tHardware is Gigabit Ethernet\n\
-                \tMTU 1500 bytes, BW 1000000 Kbit/sec",
-            );
-        }
-        "show ip route" => {
-            term.output = String::from(
-                "\nCodes: C - connected, S - static, R - RIP, M - mobile\n\
-                C  192.168.1.0/24 is directly connected, Gig0/0\n\
-                S  0.0.0.0/0 [1/0] via 192.168.1.254",
-            );
-        }
-        _ => {
-            valid = false;
+        self.index = self.lines.len();
+    }
+
+    fn current_line(&self) -> String {
+        self.lines.get(self.index).cloned().unwrap_or_default()
+    }
+
+    fn previous(&mut self) {
+        if self.index > 0 {
+            self.index -= 1;
         }
     }
 
-    let new_mode = match term.input.as_str() {
-        "enable" | "en" => {
-            if term.mode == CiscoTerminalMode::UserExec {
-                CiscoTerminalMode::PrivilegedExec
-            } else {
-                term.output = "\nYou are not in the User mode.".to_string();
-                term.mode.clone()
-            }
+    fn next(&mut self) {
+        if self.index < self.lines.len() {
+            self.index += 1;
         }
-        "disable" | "dis" => CiscoTerminalMode::UserExec,
-        "line vty 0 4" => {
-            if term.mode == CiscoTerminalMode::PrivilegedExec {
-                CiscoTerminalMode::LineConfig
-            } else {
-                term.output = "\nYou are not in the Priviledged mode.".to_string();
-                term.mode.clone()
-            }
-        }
-        "configure terminal" | "conf t" => {
-            if term.mode == CiscoTerminalMode::PrivilegedExec {
-                CiscoTerminalMode::GlobalConfig
-            } else {
-                term.output = "\nYou are not in the Priviledged mode.".to_string();
-                term.mode.clone()
-            }
-        }          
-        s if s.starts_with("configure interface ") => {
-            let interface = &s["configure interface ".len()..];
-            CiscoTerminalMode::InterfaceConfig(interface.to_string())
-        }
-        "exit" => {
-            println!("EXIT was pressed\n");
-            term.end = true;
-            term.mode.clone()
-        }
-        "" => {
-            term.output = term.input.clone();
-            term.mode.clone()
-        }
-        _ => {
-            if !valid {
-                term.output = format!("\n{}: command not found", term.input.clone());
-            }
-            term.mode.clone()
-        }
+    }
+}
+
+// ---------------------------------------------------------------- helpers
+
+fn longest_common_prefix(commands: &[String]) -> String {
+    let Some(first) = commands.first() else {
+        return String::new();
     };
 
-    term.mode = new_mode.clone();
-    term.prompt = switch_mode(&new_mode);
-    term
+    let mut prefix = first.clone();
+
+    for command in &commands[1..] {
+        while !command.starts_with(&prefix) {
+            prefix.pop();
+
+            if prefix.is_empty() {
+                return String::new();
+            }
+        }
+    }
+
+    prefix
+}
+
+fn append_output(s: &mut Cursive, buffer: &Arc<Mutex<String>>, text: &str) {
+    let snapshot = {
+        let mut out = buffer.lock().unwrap();
+        out.push_str(text);
+        out.clone()
+    };
+
+    s.call_on_name("terminal_output", |v: &mut TextView| {
+        v.set_content(snapshot);
+    });
+}
+
+// ---------------------------------------------------------------- input view
+
+/// Single-line input that draws an inline grey suggestion right after the
+/// typed text.
+struct InputView {
+    content: String,
+    cursor: usize, // byte index, always on a char boundary
+    ghost: String,
+    terminal: Arc<Mutex<cisco::Terminal>>,
+    history: Arc<Mutex<History>>,
+    output_buffer: Arc<Mutex<String>>,
+    scheme: Arc<AtomicUsize>,
+    commands: Arc<CommandTree>,
+    storage: Arc<Mutex<Storage>>,
+}
+
+impl InputView {
+    fn new(
+        terminal: Arc<Mutex<cisco::Terminal>>,
+        history: Arc<Mutex<History>>,
+        output_buffer: Arc<Mutex<String>>,
+        scheme: Arc<AtomicUsize>,
+        commands: Arc<CommandTree>,
+        storage: Arc<Mutex<Storage>>,
+    ) -> Self {
+        Self {
+            content: String::new(),
+            cursor: 0,
+            ghost: String::new(),
+            terminal,
+            history,
+            output_buffer,
+            scheme,
+            commands,
+            storage,
+        }
+    }
+
+    fn set_content(&mut self, text: String) {
+        self.cursor = text.len();
+        self.content = text;
+        self.update_ghost();
+    }
+
+    fn matches(&self) -> Vec<String> {
+        let term = self.terminal.lock().unwrap();
+        self.commands.autocomplete(&term.mode, &self.content)
+    }
+
+    fn update_ghost(&mut self) {
+        // Only suggest when the cursor is at the end of the line.
+        if self.content.is_empty() || self.cursor != self.content.len() {
+            self.ghost.clear();
+            return;
+        }
+
+        let matches = self.matches();
+
+        self.ghost = if matches.len() == 1 {
+            matches[0]
+                .strip_prefix(self.content.as_str())
+                .unwrap_or("")
+                .to_string()
+        } else {
+            // Several candidates: show the shared remainder, if any.
+            let prefix = longest_common_prefix(&matches);
+            prefix
+                .strip_prefix(self.content.as_str())
+                .unwrap_or("")
+                .to_string()
+        };
+    }
+
+    fn accept_ghost(&mut self) -> bool {
+        if self.ghost.is_empty() {
+            return false;
+        }
+
+        let ghost = std::mem::take(&mut self.ghost);
+        self.content.push_str(&ghost);
+        self.cursor = self.content.len();
+        self.update_ghost();
+        true
+    }
+
+    /// Ctrl+G: complete fully if there is one match, otherwise extend to the
+    /// longest common prefix and list the options.
+    fn complete(&mut self) -> EventResult {
+        let matches = self.matches();
+        let buffer = Arc::clone(&self.output_buffer);
+
+        match matches.as_slice() {
+            [] => EventResult::with_cb(move |s| {
+                append_output(s, &buffer, "% No matching commands\n");
+            }),
+
+            [command] => {
+                self.set_content(command.clone());
+                EventResult::consumed()
+            }
+
+            commands => {
+                let prefix = longest_common_prefix(commands);
+
+                if prefix.len() > self.content.len() {
+                    self.set_content(prefix);
+                }
+
+                let listing = format!("{}\n", commands.join("\n"));
+
+                EventResult::with_cb(move |s| {
+                    append_output(s, &buffer, &listing);
+                })
+            }
+        }
+    }
+
+    fn submit(&mut self) -> EventResult {
+        let input = std::mem::take(&mut self.content);
+        self.cursor = 0;
+        self.ghost.clear();
+
+        self.history.lock().unwrap().add_line(input.clone());
+        let _ = self.storage.lock().unwrap().add_history("local", &input);
+
+        let (old_prompt, new_prompt, reply, end): (String, String, String, bool) = {
+            let mut term = self.terminal.lock().unwrap();
+            let old_prompt = term.prompt.clone();
+
+            term.input = input.clone();
+            cisco::terminal(&mut term);
+
+            (
+                old_prompt,
+                term.prompt.clone(),
+                term.output.clone(),
+                term.end,
+            )
+        };
+
+        let mut text = format!("{} {}\n", old_prompt, input);
+
+        if !reply.is_empty() && reply != input {
+            text.push_str(&format!("{}\n", reply));
+        }
+
+        let buffer = Arc::clone(&self.output_buffer);
+
+        EventResult::with_cb(move |s| {
+            append_output(s, &buffer, &text);
+
+            s.call_on_name("prompt", |v: &mut TextView| {
+                v.set_content(new_prompt.clone());
+            });
+
+            if end {
+                s.quit();
+            }
+        })
+    }
+
+    fn history_move(&mut self, up: bool) {
+        let line = {
+            let mut h = self.history.lock().unwrap();
+
+            if up {
+                h.previous();
+            } else {
+                h.next();
+            }
+
+            h.current_line()
+        };
+
+        self.set_content(line);
+    }
+}
+
+impl View for InputView {
+    fn draw(&self, printer: &Printer) {
+        let sc = SCHEMES[self.scheme.load(Ordering::Relaxed)];
+        let normal = ColorStyle::new(sc.fg, sc.input_bg);
+        let ghost = ColorStyle::new(sc.ghost, sc.input_bg);
+        let cur = ColorStyle::new(sc.input_bg, sc.cursor);
+
+        // Background across the whole field.
+        printer.with_color(normal, |p| {
+            p.print_hline((0, 0), printer.size.x, " ");
+        });
+
+        // Horizontal scroll so the cursor stays visible.
+        let chars: Vec<char> = self.content.chars().collect();
+        let cursor_col = self.content[..self.cursor].chars().count();
+        let width = printer.size.x.saturating_sub(1).max(1);
+        let offset = cursor_col.saturating_sub(width);
+
+        let visible: String = chars.iter().skip(offset).take(width).collect();
+        printer.with_color(normal, |p| p.print((0, 0), &visible));
+
+        // Ghost text right after the typed text.
+        let typed_cols = chars.len().saturating_sub(offset);
+
+        if !self.ghost.is_empty() && typed_cols < width {
+            let room = width - typed_cols;
+            let g: String = self.ghost.chars().take(room).collect();
+            printer.with_color(ghost, |p| p.print((typed_cols, 0), &g));
+        }
+
+        // Cursor.
+        if printer.focused {
+            let col = cursor_col - offset;
+
+            let under: String = if cursor_col < chars.len() {
+                chars[cursor_col].to_string()
+            } else if let Some(first) = self.ghost.chars().next() {
+                // Cursor sits on the first ghost character.
+                first.to_string()
+            } else {
+                " ".to_string()
+            };
+
+            printer.with_color(cur, |p| p.print((col, 0), &under));
+        }
+    }
+
+    fn required_size(&mut self, _constraint: Vec2) -> Vec2 {
+        Vec2::new(INPUT_WIDTH, 1)
+    }
+
+    fn take_focus(
+        &mut self,
+        _: cursive::direction::Direction,
+    ) -> Result<EventResult, cursive::view::CannotFocus> {
+        Ok(EventResult::consumed())
+    }
+
+    fn on_event(&mut self, event: Event) -> EventResult {
+        match event {
+            Event::Char(c) => {
+                self.content.insert(self.cursor, c);
+                self.cursor += c.len_utf8();
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Backspace) => {
+                if self.cursor > 0 {
+                    let prev = self.content[..self.cursor]
+                        .char_indices()
+                        .next_back()
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+
+                    self.content.remove(prev);
+                    self.cursor = prev;
+                }
+
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Del) => {
+                if self.cursor < self.content.len() {
+                    self.content.remove(self.cursor);
+                }
+
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Left) => {
+                if let Some((i, _)) = self.content[..self.cursor].char_indices().next_back() {
+                    self.cursor = i;
+                }
+
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Right) => {
+                if self.cursor == self.content.len() {
+                    // At end of line: accept the grey suggestion.
+                    self.accept_ghost();
+                } else if let Some(c) = self.content[self.cursor..].chars().next() {
+                    self.cursor += c.len_utf8();
+                    self.update_ghost();
+                }
+
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Home) => {
+                self.cursor = 0;
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::End) => {
+                if self.cursor == self.content.len() {
+                    self.accept_ghost();
+                } else {
+                    self.cursor = self.content.len();
+                    self.update_ghost();
+                }
+
+                EventResult::consumed()
+            }
+
+            Event::CtrlChar('u') => {
+                self.content.drain(..self.cursor);
+                self.cursor = 0;
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::CtrlChar('g') => self.complete(),
+
+            Event::Key(Key::Up) => {
+                self.history_move(true);
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Down) => {
+                self.history_move(false);
+                EventResult::consumed()
+            }
+
+            Event::Key(Key::Enter) => self.submit(),
+
+            _ => EventResult::Ignored,
+        }
+    }
+}
+
+// ---------------------------------------------------------------- run
+
+pub fn run() {
+    let mut siv = Cursive::default();
+
+    let storage = Arc::new(Mutex::new(
+        Storage::open().expect("cannot open database"),
+    ));
+    let commands = Arc::new(CommandTree::load());
+
+    let past = storage
+        .lock()
+        .unwrap()
+        .load_history("local", 1000)
+        .unwrap_or_default();
+    let history = Arc::new(Mutex::new(History::from_lines(past)));
+
+    let scheme_index = Arc::new(AtomicUsize::new(0));
+    let initial = SCHEMES[0];
+
+    let terminal = Arc::new(Mutex::new(cisco::Terminal {
+        mode: cisco::CiscoTerminalMode::UserExec,
+        prompt: "router>".to_string(),
+        input: String::new(),
+        output: String::new(),
+        end: false,
+    }));
+
+    let output_buffer = Arc::new(Mutex::new(String::new()));
+
+    let text_view = TextView::new("")
+        .style(ColorStyle::new(initial.fg, initial.bg))
+        .with_name("terminal_output");
+
+    let terminal_output = ScrollView::new(text_view)
+        .scroll_strategy(cursive::view::ScrollStrategy::StickToBottom)
+        .full_width();
+
+    let input_view = InputView::new(
+        Arc::clone(&terminal),
+        Arc::clone(&history),
+        Arc::clone(&output_buffer),
+        Arc::clone(&scheme_index),
+        Arc::clone(&commands),
+        Arc::clone(&storage),
+    );
+
+    let initial_prompt = terminal.lock().unwrap().prompt.clone();
+
+    let prompt_view = TextView::new(initial_prompt)
+        .style(ColorStyle::new(initial.prompt, initial.bg))
+        .with_name("prompt");
+
+    let padded_prompt_view = PaddedView::new(Margins::lrtb(0, 1, 0, 0), prompt_view);
+
+    let input_line = LinearLayout::horizontal()
+        .child(padded_prompt_view)
+        .child(input_view.with_name("input"));
+
+    let layout = LinearLayout::vertical()
+        .child(ResizedView::with_fixed_size((80, 18), terminal_output))
+        .child(ResizedView::with_fixed_size((80, 2), input_line));
+
+    siv.add_layer(
+        Dialog::around(ResizedView::with_fixed_size((80, 20), layout))
+            .title("Cisco Router Terminal | Ctrl+G: complete | Ctrl+T: theme")
+            .padding(Margins::lrtb(1, 1, 1, 1)),
+    );
+
+    apply_scheme(&mut siv, 0);
+
+    // Ctrl+T: cycle through the colour schemes.
+    {
+        let scheme_index = Arc::clone(&scheme_index);
+        let output_buffer = Arc::clone(&output_buffer);
+
+        siv.add_global_callback(Event::CtrlChar('t'), move |s| {
+            let next = (scheme_index.load(Ordering::Relaxed) + 1) % SCHEMES.len();
+            scheme_index.store(next, Ordering::Relaxed);
+
+            apply_scheme(s, next);
+
+            append_output(
+                s,
+                &output_buffer,
+                &format!("% Theme: {}\n", SCHEMES[next].name),
+            );
+        });
+    }
+
+    siv.run();
 }
 
 
@@ -170,125 +638,75 @@ pub fn terminal(term: &mut Terminal) -> &mut Terminal {
 mod tests {
     use super::*;
 
+    /// Builds a Terminal in the given mode, feeds it `input`, and returns it after processing.
+    fn run(mode: CiscoTerminalMode, prompt: &str, input: &str) -> Terminal {
+        let mut term = Terminal {
+            mode,
+            prompt: prompt.to_string(),
+            input: input.to_string(),
+            output: String::new(),
+            end: false,
+        };
+        terminal(&mut term);
+        term
+    }
+
     #[test]
     fn test_switch_mode_output() {
-        let mode1 = CiscoTerminalMode::GlobalConfig;
-        let output1 = switch_mode(&mode1);
-        assert_eq!(output1.trim(), "router(config)#");
+        let cases = [
+            (CiscoTerminalMode::GlobalConfig, "router(config)#"),
+            (
+                CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string()),
+                "router(config-if)#",
+            ),
+            (CiscoTerminalMode::PrivilegedExec, "router#"),
+            (CiscoTerminalMode::UserExec, "router>"),
+        ];
 
-        let mode2 = CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string());
-        let output2 = switch_mode(&mode2);
-        assert_eq!(output2.trim(), "router(config-if)#");
-
-        let mode3 = CiscoTerminalMode::PrivilegedExec;
-        let output3 = switch_mode(&mode3);
-        assert_eq!(output3.trim(), "router#");
-
-        let mode4 = CiscoTerminalMode::UserExec;
-        let output4 = switch_mode(&mode4);
-        assert_eq!(output4.trim(), "router>");
+        for (mode, expected) in cases {
+            assert_eq!(switch_mode(&mode).trim(), expected, "mode: {:?}", mode);
+        }
     }
 
     #[test]
-    fn test_terminal_function() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "disable".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::UserExec);
-        assert_eq!(term.prompt.trim(), "router>");
-        assert_eq!(term.output, "disable");
+    fn test_mode_transitions_from_user_exec() {
+        let cases = [
+            ("disable", CiscoTerminalMode::UserExec, "router>"),
+            ("enable", CiscoTerminalMode::PrivilegedExec, "router#"),
+            ("en", CiscoTerminalMode::PrivilegedExec, "router#"),
+            ("configure terminal", CiscoTerminalMode::GlobalConfig, "router(config)#"),
+            ("conf t", CiscoTerminalMode::GlobalConfig, "router(config)#"),
+            (
+                "configure interface gi0/0/0",
+                CiscoTerminalMode::InterfaceConfig("gi0/0/0".to_string()),
+                "router(config-if)#",
+            ),
+            (
+                "configure interface gi0/0/1",
+                CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string()),
+                "router(config-if)#",
+            ),
+        ];
 
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "enable".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
-        assert_eq!(term.prompt.trim(), "router#");
-        assert_eq!(term.output, "enable");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "configure terminal".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::GlobalConfig);
-        assert_eq!(term.prompt.trim(), "router(config)#");
-        assert_eq!(term.output, "configure terminal");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "configure interface gi0/0/0".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::InterfaceConfig("gi0/0/0".to_string()));
-        assert_eq!(term.prompt.trim(), "router(config-if)#");
-        assert_eq!(term.output, "configure interface gi0/0/0");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "en".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
-        assert_eq!(term.prompt.trim(), "router#");
-        assert_eq!(term.output, "en");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "conf t".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::GlobalConfig);
-        assert_eq!(term.prompt.trim(), "router(config)#");
-        assert_eq!(term.output, "conf t");
+        for (input, expected_mode, expected_prompt) in cases {
+            let term = run(CiscoTerminalMode::UserExec, "router>", input);
+            assert_eq!(term.mode, expected_mode, "input: {input:?}");
+            assert_eq!(term.prompt.trim(), expected_prompt, "input: {input:?}");
+            assert_eq!(term.output, input, "input: {input:?}");
+        }
     }
 
     #[test]
-    fn test_unknown_terminal_mode() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "UnknownMode".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
+    fn test_unknown_command_in_user_exec() {
+        let term = run(CiscoTerminalMode::UserExec, "router>", "UnknownMode");
         assert_eq!(term.mode, CiscoTerminalMode::UserExec);
         assert_eq!(term.prompt.trim(), "router>");
         assert_eq!(term.output, "\nUnknownMode: command not found");
     }
 
     #[test]
-    fn test_mode_stays_same() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::PrivilegedExec,
-            prompt: "router#".to_string(),
-            input: "UnknownMode".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
+    fn test_unknown_command_keeps_privileged_exec() {
+        let term = run(CiscoTerminalMode::PrivilegedExec, "router#", "UnknownMode");
         assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
         assert_eq!(term.prompt.trim(), "router#");
         assert_eq!(term.output, "\nUnknownMode: command not found");
@@ -296,32 +714,10 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
+        let term = run(CiscoTerminalMode::UserExec, "router>", "");
         assert_eq!(term.mode, CiscoTerminalMode::UserExec);
         assert_eq!(term.prompt.trim(), "router>");
         assert_eq!(term.output, "");
-    }
-
-    #[test]
-    fn test_interface_config_mode() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "configure interface gi0/0/1".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string()));
-        assert_eq!(term.prompt.trim(), "router(config-if)#");
-        assert_eq!(term.output, "configure interface gi0/0/1");
     }
 
     #[test]
@@ -330,11 +726,11 @@ mod tests {
             mode: CiscoTerminalMode::UserExec,
             prompt: "router>".to_string(),
             input: "exit".to_string(),
-            output: "".to_string(),
+            output: String::new(),
             end: false,
         };
-        assert_eq!(term.end, false);
+        assert!(!term.end);
         terminal(&mut term);
-        assert_eq!(term.end, true);
+        assert!(term.end);
     }
 }
