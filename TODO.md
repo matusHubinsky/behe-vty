@@ -1,0 +1,15 @@
+
+- [ ] network
+    - [ ] SSH
+    - [ ] telnet 
+    - [ ] terminal
+- [ ] database
+    - [ ] saving user sessions
+    - [ ] encrpyting passwords
+- [ ] commands 
+    - [ ] cisco 
+    - [ ] juniper 
+    - [ ] mikrotik
+- [ ] UI
+    - [ ] themes 
+    - [ ] settings
