@@ -17,7 +17,7 @@ use cursive::theme::{
     BorderStyle, Color, ColorStyle, Palette, PaletteColor, Theme as CursiveTheme,
 };
 use cursive::traits::*;
-use cursive::view::{Margins, SizeConstraint};
+use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -29,6 +29,7 @@ use crate::database::{Database, Device};
 use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
+const CURSOR_FPS: u32 = 5;
 
 // ---------------------------------------------------------------- colour schemes
 
@@ -43,7 +44,16 @@ struct Scheme {
     cursor: Color,
 }
 
-const SCHEMES: [Scheme; 4] = [
+const SCHEMES: [Scheme; 5] = [
+    Scheme {
+        name: "Ubuntu",
+        bg: Color::Rgb(0x30, 0x0a, 0x24),     // #300A24 aubergine background
+        fg: Color::Rgb(0xff, 0xff, 0xff),     // white text
+        prompt: Color::Rgb(0xe9, 0x54, 0x20), // #E95420 ubuntu orange (prompt/titles)
+        ghost: Color::Rgb(0x8a, 0x6a, 0x7a),  // muted mauve (autocomplete ghost)
+        input_bg: Color::Rgb(0x30, 0x0a, 0x24),
+        cursor: Color::Rgb(0xff, 0xff, 0xff), // white blinking block
+    },
     Scheme {
         name: "Dark Purple",
         bg: Color::Rgb(0x2a, 0x2a, 0x2a),
@@ -98,7 +108,7 @@ fn cursive_theme(scheme: &Scheme) -> CursiveTheme {
 
     CursiveTheme {
         shadow: false,
-        borders: BorderStyle::Simple,
+        borders: BorderStyle::Simple, // outline always on
         palette,
     }
 }
@@ -408,18 +418,25 @@ impl View for InputView {
 
         // Cursor.
         if printer.focused {
-            let col = cursor_col - offset;
+            let blink_on = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_millis() / 530 % 2 == 0)
+                .unwrap_or(true);
 
-            let under: String = if cursor_col < chars.len() {
-                chars[cursor_col].to_string()
-            } else if let Some(first) = self.ghost.chars().next() {
-                // Cursor sits on the first ghost character.
-                first.to_string()
-            } else {
-                " ".to_string()
-            };
+            if blink_on {
+                let col = cursor_col - offset;
 
-            printer.with_color(cur, |p| p.print((col, 0), &under));
+                let under: String = if cursor_col < chars.len() {
+                    chars[cursor_col].to_string()
+                } else if let Some(first) = self.ghost.chars().next() {
+                    // Cursor sits on the first ghost character.
+                    first.to_string()
+                } else {
+                    " ".to_string()
+                };
+
+                printer.with_color(cur, |p| p.print((col, 0), &under));
+            }
         }
     }
 
@@ -532,33 +549,6 @@ impl View for InputView {
     }
 }
 
-// ---------------------------------------------------------------- window scaling
-
-/// Dialog chrome: 2 border cols + 2 padding cols; 2 border rows + 2 padding
-/// rows + 1 title row. Clamps to sane minimums (screen_size() is (0,0) before
-/// the first layout phase).
-fn content_size(screen: Vec2) -> (usize, usize) {
-    (
-        screen.x.saturating_sub(4).max(40),
-        screen.y.saturating_sub(5).max(10),
-    )
-}
-
-/// Recompute the fixed sizes of the root/output/input boxes from the window.
-fn apply_window_size(s: &mut Cursive) {
-    let (w, h) = content_size(s.screen_size());
-    let out_h = h.saturating_sub(2).max(1);
-    s.call_on_name("root", move |v: &mut ResizedView<LinearLayout>| {
-        v.set_constraints(SizeConstraint::Fixed(w), SizeConstraint::Fixed(h));
-    });
-    s.call_on_name("output_box", move |v: &mut ResizedView<ScrollView<TextView>>| {
-        v.set_constraints(SizeConstraint::Fixed(w), SizeConstraint::Fixed(out_h));
-    });
-    s.call_on_name("input_box", move |v: &mut ResizedView<LinearLayout>| {
-        v.set_constraints(SizeConstraint::Fixed(w), SizeConstraint::Fixed(2));
-    });
-}
-
 // ---------------------------------------------------------------- connection dialog
 
 /// PuTTY-style startup dialog: pick a saved session or fill in a new one.
@@ -589,7 +579,7 @@ fn connection_dialog(
 
     let form = LinearLayout::vertical()
         .child(TextView::new("Saved sessions:"))
-        .child(ScrollView::new(sessions.with_name("sessions")).fixed_height(6))
+        .child(ScrollView::new(sessions.with_name("sessions")).fixed_height(10))
         .child(LinearLayout::horizontal()
             .child(TextView::new("Protocol:  "))
             .child(proto.with_name("proto")))
@@ -598,13 +588,13 @@ fn connection_dialog(
             .child(vendor_sel.with_name("vendor")))
         .child(LinearLayout::horizontal()
             .child(TextView::new("Host/path: "))
-            .child(EditView::new().with_name("host").fixed_width(30)))
+            .child(EditView::new().with_name("host").fixed_width(48)))
         .child(LinearLayout::horizontal()
             .child(TextView::new("Port/baud: "))
-            .child(EditView::new().with_name("port").fixed_width(8)))
+            .child(EditView::new().with_name("port").fixed_width(10)))
         .child(LinearLayout::horizontal()
             .child(TextView::new("Username:  "))
-            .child(EditView::new().with_name("user").fixed_width(20)));
+            .child(EditView::new().with_name("user").fixed_width(24)));
 
     let db2 = Arc::clone(db);
     let out2 = Arc::clone(output_buffer);
@@ -613,6 +603,7 @@ fn connection_dialog(
     s.add_layer(
         Dialog::around(form)
             .title("Open connection")
+            .padding(Margins::lrtb(1, 1, 1, 1))
             .button("Open", move |s| {
                 let picked: Option<Device> = s
                     .call_on_name("sessions", |v: &mut SelectView<Device>| {
@@ -760,21 +751,21 @@ pub fn run() {
         .child(padded_prompt_view)
         .child(input_view.with_name("input"));
 
-    // Scale the terminal to the window: sizes computed from the screen size,
-    // refreshed on every Event::WindowResize.
-    let (w, h) = content_size(siv.screen_size());
-    let output_box =
-        ResizedView::with_fixed_size((w, h.saturating_sub(2).max(1)), terminal_output)
-            .with_name("output_box");
-    let input_box = ResizedView::with_fixed_size((w, 2), input_line).with_name("input_box");
+    // Elastic full-window layout: the root takes the whole screen (StackView
+    // clamps the dialog to it, the Dialog subtracts its own border), the
+    // output scrollback absorbs every row except the 1-row input line.
+    // Resizing the terminal window is handled automatically by re-layout.
+    let output_box = ResizedView::with_full_height(terminal_output);
+    let input_box = input_line.fixed_height(1).full_width();
     let layout = LinearLayout::vertical().child(output_box).child(input_box);
-    let root = ResizedView::with_fixed_size((w, h), layout).with_name("root");
+    let root = ResizedView::with_full_screen(layout);
 
     siv.add_layer(
         Dialog::around(root)
-            .title("behe-vty | TAB: complete | Ctrl+T: theme")
-            .padding(Margins::lrtb(1, 1, 1, 1)),
+            .title("BEHE-VTY | TAB: complete")
+            .padding(Margins::lrtb(1, 1, 1, 1)), // keep padding; no title bar = max rows
     );
+
 
     apply_scheme(&mut siv, 0);
 
@@ -799,20 +790,6 @@ pub fn run() {
         });
     }
 
-    siv.add_global_callback(Event::WindowResize, |s| apply_window_size(s));
-    apply_window_size(&mut siv);
-
+    siv.set_fps(CURSOR_FPS);
     siv.run();
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_content_size() {
-        assert_eq!(content_size(Vec2::new(120, 40)), (116, 35));
-        assert_eq!(content_size(Vec2::new(10, 5)), (40, 10));
-        assert_eq!(content_size(Vec2::new(0, 0)), (40, 10));
-    }
 }
