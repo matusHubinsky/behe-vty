@@ -1,0 +1,113 @@
+# Cisco IOS command templates per terminal mode.
+# Keys must match CommandTree::key() in src/commands.rs.
+# Entries may include arguments ("line vty 0 4"); autocomplete completes
+# whole listed strings only (no dynamic argument completion yet).
+# Mode-transition commands (enable / disable / configure … / interface … /
+# line … / exit / end) must stay here: cisco.rs::terminal() acts on them.
+
+user_exec:
+  - enable
+  - disable
+  - exit
+  - logout
+  - ping
+  - traceroute
+  - telnet
+  - ssh
+  - who
+  - show version
+  - show clock
+  - show flash
+  - show history
+  - show users
+  - show sessions
+  - show ip interface brief
+  - show interfaces
+  - show processes cpu
+
+privileged_exec:
+  - enable
+  - disable
+  - exit
+  - configure terminal
+  - configure interface
+  - copy running-config startup-config
+  - write memory
+  - erase startup-config
+  - reload
+  - ping
+  - traceroute
+  - telnet
+  - ssh
+  - disconnect
+  - show running-config
+  - show startup-config
+  - show version
+  - show clock
+  - show flash
+  - show history
+  - show users
+  - show sessions
+  - show ip route
+  - show ip interface brief
+  - show ip protocols
+  - show interfaces
+  - show interfaces description
+  - show cdp neighbors
+  - show mac address-table
+  - show spanning-tree
+  - show vlan
+  - show processes cpu
+  - debug ip packet
+  - undebug all
+
+# router(config)#
+global_config:
+  - hostname
+  - no
+  - enable secret
+  - enable password
+  - service password-encryption
+  - banner motd
+  - ip domain-name
+  - ip name-server
+  - ip default-gateway
+  - ip route
+  - username
+  - crypto key generate rsa
+  - ip ssh version 2
+  - interface
+  - line console 0
+  - line vty 0 4
+  - router ospf
+  - spanning-tree mode
+  - do
+  - exit
+  - end
+
+# router(config-line)#
+line_config:
+  - login
+  - login local
+  - password
+  - exec-timeout
+  - logging synchronous
+  - transport input telnet
+  - transport input ssh
+  - transport input all
+  - exit
+  - end
+
+# router(config-if)#
+interface_config:
+  - description
+  - ip address
+  - no
+  - shutdown
+  - no shutdown
+  - duplex auto
+  - speed auto
+  - switchport mode access
+  - switchport mode trunk
+  - exit
+  - end

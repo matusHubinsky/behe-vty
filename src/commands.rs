@@ -12,19 +12,21 @@
 // See the Licence for the specific language governing permissions and
 // limitations under the Licence.
 
-use serde::Deserialize;
-use std::collections::HashMap;
-
 use crate::cisco::CiscoTerminalMode;
+use std::collections::BTreeMap;
 
-#[derive(Deserialize)]
-pub struct CommandTree(HashMap<String, Vec<String>>);
+/// Command templates per terminal mode, loaded from `commands-cisco.yaml`.
+pub struct CommandTree {
+    modes: BTreeMap<String, Vec<String>>,
+}
 
 impl CommandTree {
     /// The default tree is baked into the binary.
     pub fn load() -> Self {
-        let text = include_str!("../commands-cisco.yaml");
-        serde_yml::from_str(text).expect("invalid commands.yaml")
+        let text = include_str!("../commands/cisco.yaml");
+        let modes: BTreeMap<String, Vec<String>> =
+            serde_yml::from_str(text).expect("invalid commands-cisco.yaml");
+        Self { modes }
     }
 
     fn key(mode: &CiscoTerminalMode) -> &'static str {
@@ -37,20 +39,15 @@ impl CommandTree {
         }
     }
 
-    /// All commands that start with `input` in the given mode, sorted.
-    pub fn autocomplete(&self, mode: &CiscoTerminalMode, input: &str) -> Vec<String> {
-        let mut matches: Vec<String> = self
-            .0
-            .get(Self::key(mode))
-            .map(|cmds| {
-                cmds.iter()
-                    .filter(|c| c.starts_with(input))
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default();
-
-        matches.sort();
-        matches
+    /// All commands available in `mode` that start with `prefix`.
+    pub fn autocomplete(&self, mode: &CiscoTerminalMode, prefix: &str) -> Vec<String> {
+        match self.modes.get(Self::key(mode)) {
+            Some(commands) => commands
+                .iter()
+                .filter(|c| c.starts_with(prefix))
+                .cloned()
+                .collect(),
+            None => Vec::new(),
+        }
     }
 }
