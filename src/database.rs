@@ -12,6 +12,7 @@
 // See the Licence for the specific language governing permissions and
 // limitations under the Licence.
 
+
 use rusqlite::{params, Connection, Result};
 use std::path::PathBuf;
 
@@ -24,6 +25,9 @@ pub struct Device {
     pub name: String,
     pub host: String,
     pub port: u16,
+    pub protocol: String, // "serial" | "ssh" | "telnet"
+    pub vendor: String,   // "cisco" | "juniper" | "mikrotik"
+    pub username: String,
 }
 
 fn db_path() -> PathBuf {
@@ -40,11 +44,18 @@ fn db_path() -> PathBuf {
 
 /// Schema migrations, embedded at compile time. Each entry is applied at most
 /// once and recorded in the `schema_migrations` table.
-const MIGRATIONS: &[(&str, &str)] = &[("001-init", include_str!("../migrations/001-init.sql"))];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("001_init", include_str!("../migrations/001-init.sql")),
+    ("002_devices_extra", include_str!("../migrations/002-devices-extra.sql")),
+];
 
 impl Database {
     pub fn open() -> Result<Self> {
-        let mut conn = Connection::open(db_path())?;
+        Self::open_at(&db_path())
+    }
+
+    fn open_at(path: &std::path::Path) -> Result<Self> {
+        let mut conn = Connection::open(path)?;
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS schema_migrations (
                  version    TEXT PRIMARY KEY,
@@ -100,11 +111,13 @@ impl Database {
 
     // ---------------- devices
 
-    pub fn save_device(&self, name: &str, host: &str, port: u16) -> Result<()> {
+    pub fn save_device(&self, d: &Device) -> Result<()> {
         self.conn.execute(
-            "INSERT INTO devices (name, host, port) VALUES (?1, ?2, ?3)
-             ON CONFLICT(name) DO UPDATE SET host = ?2, port = ?3",
-            params![name, host, port],
+            "INSERT INTO devices (name, host, port, protocol, vendor, username)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(name) DO UPDATE SET
+                 host = ?2, port = ?3, protocol = ?4, vendor = ?5, username = ?6",
+            params![d.name, d.host, d.port, d.protocol, d.vendor, d.username],
         )?;
         Ok(())
     }
@@ -112,13 +125,16 @@ impl Database {
     pub fn get_device(&self, name: &str) -> Result<Option<Device>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT name, host, port FROM devices WHERE name = ?1")?;
+            .prepare("SELECT name, host, port, protocol, vendor, username FROM devices WHERE name = ?1")?;
 
         let mut rows = stmt.query_map(params![name], |row| {
             Ok(Device {
                 name: row.get(0)?,
                 host: row.get(1)?,
                 port: row.get(2)?,
+                protocol: row.get(3)?,
+                vendor: row.get(4)?,
+                username: row.get(5)?,
             })
         })?;
 
@@ -128,13 +144,16 @@ impl Database {
     pub fn list_devices(&self) -> Result<Vec<Device>> {
         let mut stmt = self
             .conn
-            .prepare("SELECT name, host, port FROM devices ORDER BY name")?;
+            .prepare("SELECT name, host, port, protocol, vendor, username FROM devices ORDER BY name")?;
 
         let rows = stmt.query_map([], |row| {
             Ok(Device {
                 name: row.get(0)?,
                 host: row.get(1)?,
                 port: row.get(2)?,
+                protocol: row.get(3)?,
+                vendor: row.get(4)?,
+                username: row.get(5)?,
             })
         })?;
 
@@ -156,7 +175,7 @@ mod tests {
     fn test_db() -> Database {
         let path = std::env::temp_dir().join(format!("behe-vty-test-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
-        std::env::set_var("BEHE_VTY_DB", &path);
+        // std::env::set_var("BEHE_VTY_DB", &path);
         Database::open().unwrap()
     }
 

@@ -14,8 +14,8 @@ publish = false
 
 [dependencies]
 cursive = { version = "0.21", features = ["toml"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_yml = "0.0.12"
-dirs = "5"
-
+dirs = "7"
+serialport = { version = "4.10.1", default-features = false } 

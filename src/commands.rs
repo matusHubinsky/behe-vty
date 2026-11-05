@@ -15,17 +15,52 @@
 use crate::cisco::CiscoTerminalMode;
 use std::collections::BTreeMap;
 
-/// Command templates per terminal mode, loaded from `commands-cisco.yaml`.
+/// Network device vendor: selects the command tree (and, for the local
+/// simulator, the prompt style).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Vendor {
+    Cisco,
+    Juniper,
+    Mikrotik,
+}
+
+impl Vendor {
+    pub fn all() -> &'static [Vendor] {
+        &[Vendor::Cisco, Vendor::Juniper, Vendor::Mikrotik]
+    }
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Vendor::Cisco => "Cisco",
+            Vendor::Juniper => "Juniper",
+            Vendor::Mikrotik => "Mikrotik",
+        }
+    }
+
+    pub fn parse(s: &str) -> Vendor {
+        match s.to_ascii_lowercase().as_str() {
+            "juniper" | "junos" => Vendor::Juniper,
+            "mikrotik" | "routeros" => Vendor::Mikrotik,
+            _ => Vendor::Cisco,
+        }
+    }
+}
+
+/// Command templates per terminal mode, loaded from `commands-<vendor>.yaml`.
 pub struct CommandTree {
     modes: BTreeMap<String, Vec<String>>,
 }
 
 impl CommandTree {
-    /// The default tree is baked into the binary.
-    pub fn load() -> Self {
-        let text = include_str!("../commands/cisco.yaml");
+    /// The command tree for `vendor` is baked into the binary.
+    pub fn load(vendor: Vendor) -> Self {
+        let text = match vendor {
+            Vendor::Cisco => include_str!("../commands/cisco.yaml"),
+            Vendor::Juniper => include_str!("../commands/juniper.yaml"),
+            Vendor::Mikrotik => include_str!("../commands/mikrotik.yaml"),
+        };
         let modes: BTreeMap<String, Vec<String>> =
-            serde_yml::from_str(text).expect("invalid commands-cisco.yaml");
+            serde_yml::from_str(text).expect("invalid commands yaml");
         Self { modes }
     }
 
@@ -48,6 +83,46 @@ impl CommandTree {
                 .cloned()
                 .collect(),
             None => Vec::new(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vendor_parse_and_labels() {
+        assert_eq!(Vendor::parse("junos"), Vendor::Juniper);
+        assert_eq!(Vendor::parse("RouterOS"), Vendor::Mikrotik);
+        assert_eq!(Vendor::parse("cisco"), Vendor::Cisco);
+        assert_eq!(Vendor::all().len(), 3);
+        assert_eq!(Vendor::Cisco.label(), "Cisco");
+    }
+
+    #[test]
+    fn test_autocomplete_filters_by_mode_and_prefix() {
+        let tree = CommandTree::load(Vendor::Cisco);
+
+        let user = tree.autocomplete(&CiscoTerminalMode::UserExec, "en");
+        assert_eq!(user, vec!["enable".to_string()]);
+
+        let priv_cmds = tree.autocomplete(&CiscoTerminalMode::PrivilegedExec, "conf");
+        assert!(priv_cmds.contains(&"configure terminal".to_string()));
+        assert!(priv_cmds.contains(&"configure interface".to_string()));
+
+        assert!(tree
+            .autocomplete(&CiscoTerminalMode::UserExec, "zzzz")
+            .is_empty());
+    }
+
+    #[test]
+    fn test_all_vendor_trees_load() {
+        for v in Vendor::all() {
+            let tree = CommandTree::load(*v);
+            assert!(!tree
+                .autocomplete(&CiscoTerminalMode::UserExec, "")
+                .is_empty());
         }
     }
 }

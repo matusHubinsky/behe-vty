@@ -1,0 +1,32 @@
+user_exec:
+  - /system identity print
+  - /system resource print
+  - /interface print
+  - /ip address print
+  - /ip route print
+  - ping
+  - quit
+privileged_exec:
+  - /system identity print
+  - /interface print
+  - /ip address print
+  - /ip route print
+  - ping
+  - quit
+global_config:
+  - /ip address add
+  - /interface
+  - /system
+  - quit
+  - exit
+  - end
+line_config:
+  - set
+  - quit
+  - exit
+  - end
+interface_config:
+  - set
+  - quit
+  - exit
+  - end

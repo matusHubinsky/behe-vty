@@ -18,15 +18,15 @@ use cursive::theme::{
 };
 use cursive::traits::*;
 use cursive::view::{Margins, SizeConstraint};
-use cursive::views::{Dialog, LinearLayout, PaddedView, ResizedView, ScrollView, TextView};
+use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::cisco;
-use crate::commands::CommandTree;
-use crate::database::Database;
-use crate::network;
+use crate::commands::{CommandTree, Vendor};
+use crate::database::{Database, Device};
+use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
 
@@ -200,7 +200,7 @@ struct InputView {
     history: Arc<Mutex<History>>,
     output_buffer: Arc<Mutex<String>>,
     scheme: Arc<AtomicUsize>,
-    commands: Arc<CommandTree>,
+    commands: Arc<RwLock<CommandTree>>,
     database: Arc<Mutex<Database>>,
 }
 
@@ -210,7 +210,7 @@ impl InputView {
         history: Arc<Mutex<History>>,
         output_buffer: Arc<Mutex<String>>,
         scheme: Arc<AtomicUsize>,
-        commands: Arc<CommandTree>,
+        commands: Arc<RwLock<CommandTree>>,
         database: Arc<Mutex<Database>>,
     ) -> Self {
         Self {
@@ -234,7 +234,7 @@ impl InputView {
 
     fn matches(&self) -> Vec<String> {
         let term = self.terminal.lock().unwrap();
-        self.commands.autocomplete(&term.mode, &self.content)
+        self.commands.read().unwrap().autocomplete(&term.mode, &self.content)
     }
 
     fn update_ghost(&mut self) {
@@ -273,7 +273,7 @@ impl InputView {
         true
     }
 
-    /// TAB: complete fully if there is one match, otherwise extend to the
+    /// Ctrl+G: complete fully if there is one match, otherwise extend to the
     /// longest common prefix and list the options.
     fn complete(&mut self) -> EventResult {
         let matches = self.matches();
@@ -312,6 +312,16 @@ impl InputView {
 
         self.history.lock().unwrap().add_line(input.clone());
         let _ = self.database.lock().unwrap().add_history("local", &input);
+
+        // Connection / diagnostic commands are handled by networking,
+        // not by the cisco simulator.
+        if let Some(reply) = networking::handle_command(&input) {
+            let prompt = self.terminal.lock().unwrap().prompt.clone();
+            let buffer = Arc::clone(&self.output_buffer);
+            return EventResult::with_cb(move |s| {
+                append_output(s, &buffer, &format!("{prompt} {input}\n{reply}\n"));
+            });
+        }
 
         let (old_prompt, new_prompt, reply, end): (String, String, String, bool) = {
             let mut term = self.terminal.lock().unwrap();
@@ -522,6 +532,8 @@ impl View for InputView {
     }
 }
 
+// ---------------------------------------------------------------- window scaling
+
 /// Dialog chrome: 2 border cols + 2 padding cols; 2 border rows + 2 padding
 /// rows + 1 title row. Clamps to sane minimums (screen_size() is (0,0) before
 /// the first layout phase).
@@ -547,6 +559,149 @@ fn apply_window_size(s: &mut Cursive) {
     });
 }
 
+// ---------------------------------------------------------------- connection dialog
+
+/// PuTTY-style startup dialog: pick a saved session or fill in a new one.
+fn connection_dialog(
+    s: &mut Cursive,
+    db: &Arc<Mutex<Database>>,
+    output_buffer: &Arc<Mutex<String>>,
+    commands: &Arc<RwLock<CommandTree>>,
+) {
+    let saved = db.lock().unwrap().list_devices().unwrap_or_default();
+
+    let mut sessions = SelectView::<Device>::new();
+    for d in saved {
+        sessions.add_item(format!("{:<14} {}:{}", d.name, d.host, d.port), d);
+    }
+
+    let mut proto = SelectView::<networking::Protocol>::new();
+    proto.add_item("serial", networking::Protocol::Serial);
+    proto.add_item("ssh", networking::Protocol::Ssh);
+    proto.add_item("telnet", networking::Protocol::Telnet);
+    proto.set_selection(1);
+
+    let mut vendor_sel = SelectView::<Vendor>::new();
+    for v in Vendor::all() {
+        vendor_sel.add_item(v.label(), *v);
+    }
+    vendor_sel.set_selection(0);
+
+    let form = LinearLayout::vertical()
+        .child(TextView::new("Saved sessions:"))
+        .child(ScrollView::new(sessions.with_name("sessions")).fixed_height(6))
+        .child(LinearLayout::horizontal()
+            .child(TextView::new("Protocol:  "))
+            .child(proto.with_name("proto")))
+        .child(LinearLayout::horizontal()
+            .child(TextView::new("Device:    "))
+            .child(vendor_sel.with_name("vendor")))
+        .child(LinearLayout::horizontal()
+            .child(TextView::new("Host/path: "))
+            .child(EditView::new().with_name("host").fixed_width(30)))
+        .child(LinearLayout::horizontal()
+            .child(TextView::new("Port/baud: "))
+            .child(EditView::new().with_name("port").fixed_width(8)))
+        .child(LinearLayout::horizontal()
+            .child(TextView::new("Username:  "))
+            .child(EditView::new().with_name("user").fixed_width(20)));
+
+    let db2 = Arc::clone(db);
+    let out2 = Arc::clone(output_buffer);
+    let cmds2 = Arc::clone(commands);
+
+    s.add_layer(
+        Dialog::around(form)
+            .title("Open connection")
+            .button("Open", move |s| {
+                let picked: Option<Device> = s
+                    .call_on_name("sessions", |v: &mut SelectView<Device>| {
+                        v.selected_id().and_then(|i| v.get_item(i).map(|(_, d)| d.clone()))
+                    })
+                    .flatten();
+
+                let proto = s
+                    .call_on_name("proto", |v: &mut SelectView<networking::Protocol>| {
+                        v.selected_id().and_then(|i| v.get_item(i).map(|(_, p)| *p))
+                    })
+                    .flatten()
+                    .unwrap_or(networking::Protocol::Ssh);
+
+                let host = s
+                    .call_on_name("host", |v: &mut EditView| v.get_content().to_string())
+                    .unwrap_or_default();
+                let port_txt = s
+                    .call_on_name("port", |v: &mut EditView| v.get_content().to_string())
+                    .unwrap_or_default();
+                let user = s
+                    .call_on_name("user", |v: &mut EditView| v.get_content().to_string())
+                    .unwrap_or_default();
+
+                let vendor = s
+                    .call_on_name("vendor", |v: &mut SelectView<Vendor>| {
+                        v.selected_id().and_then(|i| v.get_item(i).map(|(_, x)| *x))
+                    })
+                    .flatten()
+                    .unwrap_or(Vendor::Cisco);
+
+                let (name, host, port, proto, vendor, user) = match picked {
+                    Some(d) => {
+                        let p = match d.protocol.as_str() {
+                            "serial" => networking::Protocol::Serial,
+                            "telnet" => networking::Protocol::Telnet,
+                            _ => networking::Protocol::Ssh,
+                        };
+                        (d.name, d.host, d.port, p, Vendor::parse(&d.vendor), d.username)
+                    }
+                    None => {
+                        let port = port_txt.parse().unwrap_or(proto.default_port());
+                        let name = if host.is_empty() { "adhoc".to_string() } else { host.clone() };
+                        (name, host, port, proto, vendor, user)
+                    }
+                };
+
+                let endpoint = match proto {
+                    networking::Protocol::Serial => networking::Endpoint::Serial {
+                        path: host.clone(),
+                        baud: u32::from(port),
+                    },
+                    p => networking::Endpoint::Remote {
+                        protocol: p,
+                        host: host.clone(),
+                        port,
+                        username: user.clone(),
+                        vendor,
+                    },
+                };
+
+                let msg = match endpoint.check() {
+                    Ok(()) => {
+                        let dev = Device {
+                            name: name.clone(),
+                            host: host.clone(),
+                            port,
+                            protocol: proto.label().to_string(),
+                            vendor: vendor.label().to_lowercase(),
+                            username: user.clone(),
+                        };
+                        let _ = db2.lock().unwrap().save_device(&dev);
+                        // Switch the autocomplete tree to the selected vendor.
+                        *cmds2.write().unwrap() = CommandTree::load(vendor);
+                        format!("% {name} {host}:{port} reachable — session plumbing TODO, local simulator")
+                    }
+                    Err(e) => format!("% {host}:{port} unreachable: {e}"),
+                };
+
+                append_output(s, &out2, &format!("{msg}\n"));
+                s.pop_layer();
+            })
+            .button("Local simulator", |s| {
+                s.pop_layer();
+            })
+            .button("Quit", |s| s.quit()),
+    );
+}
+
 // ---------------------------------------------------------------- run
 
 pub fn run() {
@@ -555,7 +710,7 @@ pub fn run() {
     let database = Arc::new(Mutex::new(
         Database::open().expect("cannot open database"),
     ));
-    let commands = Arc::new(CommandTree::load());
+    let commands = Arc::new(RwLock::new(CommandTree::load(Vendor::Cisco)));
 
     let past = database
         .lock()
@@ -582,8 +737,7 @@ pub fn run() {
         .with_name("terminal_output");
 
     let terminal_output = ScrollView::new(text_view)
-        .scroll_strategy(cursive::view::ScrollStrategy::StickToBottom)
-        .full_width();
+        .scroll_strategy(cursive::view::ScrollStrategy::StickToBottom);
 
     let input_view = InputView::new(
         Arc::clone(&terminal),
@@ -606,17 +760,25 @@ pub fn run() {
         .child(padded_prompt_view)
         .child(input_view.with_name("input"));
 
-    let layout = LinearLayout::vertical()
-        .child(ResizedView::with_fixed_size((80, 18), terminal_output))
-        .child(ResizedView::with_fixed_size((80, 2), input_line));
+    // Scale the terminal to the window: sizes computed from the screen size,
+    // refreshed on every Event::WindowResize.
+    let (w, h) = content_size(siv.screen_size());
+    let output_box =
+        ResizedView::with_fixed_size((w, h.saturating_sub(2).max(1)), terminal_output)
+            .with_name("output_box");
+    let input_box = ResizedView::with_fixed_size((w, 2), input_line).with_name("input_box");
+    let layout = LinearLayout::vertical().child(output_box).child(input_box);
+    let root = ResizedView::with_fixed_size((w, h), layout).with_name("root");
 
     siv.add_layer(
-        Dialog::around(ResizedView::with_fixed_size((80, 20), layout))
+        Dialog::around(root)
             .title("behe-vty | TAB: complete | Ctrl+T: theme")
             .padding(Margins::lrtb(1, 1, 1, 1)),
     );
 
     apply_scheme(&mut siv, 0);
+
+    connection_dialog(&mut siv, &database, &output_buffer, &commands);
 
     // Ctrl+T: cycle through the colour schemes.
     {
@@ -641,4 +803,16 @@ pub fn run() {
     apply_window_size(&mut siv);
 
     siv.run();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_content_size() {
+        assert_eq!(content_size(Vec2::new(120, 40)), (116, 35));
+        assert_eq!(content_size(Vec2::new(10, 5)), (40, 10));
+        assert_eq!(content_size(Vec2::new(0, 0)), (40, 10));
+    }
 }

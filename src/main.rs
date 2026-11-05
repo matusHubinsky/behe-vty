@@ -16,6 +16,7 @@ mod cisco;
 mod commands;
 mod database;
 mod tui;
+mod networking;
 
 fn main() {
     tui::run();
