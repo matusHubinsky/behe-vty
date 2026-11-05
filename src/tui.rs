@@ -17,7 +17,7 @@ use cursive::theme::{
     BorderStyle, Color, ColorStyle, Palette, PaletteColor, Theme as CursiveTheme,
 };
 use cursive::traits::*;
-use cursive::view::Margins;
+use cursive::view::{Margins, SizeConstraint};
 use cursive::views::{Dialog, LinearLayout, PaddedView, ResizedView, ScrollView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -26,6 +26,7 @@ use std::sync::{Arc, Mutex};
 use crate::cisco;
 use crate::commands::CommandTree;
 use crate::database::Database;
+use crate::network;
 
 const INPUT_WIDTH: usize = 72;
 
@@ -521,6 +522,31 @@ impl View for InputView {
     }
 }
 
+/// Dialog chrome: 2 border cols + 2 padding cols; 2 border rows + 2 padding
+/// rows + 1 title row. Clamps to sane minimums (screen_size() is (0,0) before
+/// the first layout phase).
+fn content_size(screen: Vec2) -> (usize, usize) {
+    (
+        screen.x.saturating_sub(4).max(40),
+        screen.y.saturating_sub(5).max(10),
+    )
+}
+
+/// Recompute the fixed sizes of the root/output/input boxes from the window.
+fn apply_window_size(s: &mut Cursive) {
+    let (w, h) = content_size(s.screen_size());
+    let out_h = h.saturating_sub(2).max(1);
+    s.call_on_name("root", move |v: &mut ResizedView<LinearLayout>| {
+        v.set_constraints(SizeConstraint::Fixed(w), SizeConstraint::Fixed(h));
+    });
+    s.call_on_name("output_box", move |v: &mut ResizedView<ScrollView<TextView>>| {
+        v.set_constraints(SizeConstraint::Fixed(w), SizeConstraint::Fixed(out_h));
+    });
+    s.call_on_name("input_box", move |v: &mut ResizedView<LinearLayout>| {
+        v.set_constraints(SizeConstraint::Fixed(w), SizeConstraint::Fixed(2));
+    });
+}
+
 // ---------------------------------------------------------------- run
 
 pub fn run() {
@@ -610,6 +636,9 @@ pub fn run() {
             );
         });
     }
+
+    siv.add_global_callback(Event::WindowResize, |s| apply_window_size(s));
+    apply_window_size(&mut siv);
 
     siv.run();
 }
