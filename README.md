@@ -1,5 +1,3 @@
-# Behe-VTY 
-
 ```
 ██████╗ ███████╗██╗  ██╗███████╗    ██╗   ██╗████████╗██╗   ██╗
 ██╔══██╗██╔════╝██║  ██║██╔════╝    ██║   ██║╚══██╔══╝╚██╗ ██╔╝
@@ -25,7 +23,6 @@ $ git pull https://github.com/matusHubinsky/behe-vty && cd behe-cty && cargo bui
 $ behe-vty
 $ behe-terminal
 $ behe-console
-
 ```
 
 ## License 

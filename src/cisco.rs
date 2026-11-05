@@ -1,13 +1,27 @@
+// Copyright (c) 2026 - Matus Hubinsky
+
+// Licensed under the EUPL-1.2-only
+// You may not use this work except in compliance with the Licence.
+// You may obtain a copy of the Licence at:
+
+// https://joinup.ec.europa.eu/software/page/eupl
+
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the Licence is distributed on an "AS IS" basis,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the Licence for the specific language governing permissions and
+// limitations under the Licence.
+
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum CiscoTerminalMode {
     UserExec,
     PrivilegedExec,
     GlobalConfig,
     LineConfig,
-    InterfaceConfig(String), // Associated data for interface ID
+    InterfaceConfig(String),
 }
 
-#[derive(Debug, PartialEq)]
 pub struct Terminal {
     pub mode: CiscoTerminalMode,
     pub prompt: String,
@@ -22,132 +36,93 @@ pub fn switch_mode(mode: &CiscoTerminalMode) -> String {
         CiscoTerminalMode::PrivilegedExec => "router#".to_string(),
         CiscoTerminalMode::GlobalConfig => "router(config)#".to_string(),
         CiscoTerminalMode::LineConfig => "router(config-line)#".to_string(),
-        CiscoTerminalMode::InterfaceConfig(_interface) => "router(config-if)#".to_string(),
+        CiscoTerminalMode::InterfaceConfig(_) => "router(config-if)#".to_string(),
     }
 }
 
-// ----------------------------------------------------------------------
-// todo I need to determine what kind of code I am looking at.
-// terminal_change_mode
-// terminal_show
-// terminal_configure
-// terminal_security
-// terminal_administration
-// ----------------------------------------------------------------------
-// rename thins to parser
-// or some other fance way
-pub fn terminal(term: &mut Terminal) -> &mut Terminal {
-    term.output = term.input.clone();
-    term.end = false;
+/// Parses the arguments of a `configure ...` command into the mode it selects.
+/// `tokens` is the whole command line split on whitespace.
+fn configure_target(tokens: &[&str]) -> Option<CiscoTerminalMode> {
+    match tokens.get(1) {
+        Some(&"terminal") | Some(&"t") => Some(CiscoTerminalMode::GlobalConfig),
+        Some(&"interface") | Some(&"int") => tokens
+            .get(2)
+            .map(|name| CiscoTerminalMode::InterfaceConfig((*name).to_string())),
+        _ => None,
+    }
+}
 
-    let mut valid = true;
+pub fn terminal(term: &mut Terminal) {
+    let input = term.input.trim().to_string();
 
-    match term.input.as_str() {
-        "show ip interface brief" => {
-            term.output = String::from(
-                "\nInterface\tIP-Address\tOK?\tMethod\tStatus\tProtocol\n\
-                Gig0/0\t192.168.1.1\tYES\tmanual\tup\tup\n\
-                Gig0/1\tunassigned\tNO\tunset\tdown\tdown",
-            );
-        }
-        "show version" => {
-            term.output = String::from(
-                "\nCisco IOS Software, C800 Software (C800-UNIVERSALK9-M), Version 15.5(3)M\n\
-                Technical Support: http://www.cisco.com/techsupport\n\
-                ROM: System Bootstrap, Version 12.4(22r)YB\n\
-                System image file is 'flash:c800-universalk9-mz.SPA.155-3.M.bin'\n\
-                Uptime is 3 weeks, 2 days, 5 hours, 22 minutes",
-            );
-        }
-        "show running-config" => {
-            term.output = String::from(
-                "\nBuilding configuration...\n\
-                Current configuration : 1024 bytes\n\
-                version 15.5\n\
-                hostname Router\n\
-                interface Gig0/0\n\
-                \tip address 192.168.1.1 255.255.255.0\n\
-                \tno shutdown\n\
-                interface Gig0/1\n\
-                \tshutdown\n\
-                line vty 0 4\n\
-                \tpassword cisco\n\
-                \tlogin",
-            );
-        }
-        "show interfaces" => {
-            term.output = String::from(
-                "\nGig0/0 is up, line protocol is up\n\
-                \tHardware is Gigabit Ethernet\n\
-                \tInternet address is 192.168.1.1/24\n\
-                \tMTU 1500 bytes, BW 1000000 Kbit/sec\n\
-                Gig0/1 is administratively down, line protocol is down\n\
-                \tHardware is Gigabit Ethernet\n\
-                \tMTU 1500 bytes, BW 1000000 Kbit/sec",
-            );
-        }
-        "show ip route" => {
-            term.output = String::from(
-                "\nCodes: C - connected, S - static, R - RIP, M - mobile\n\
-                C  192.168.1.0/24 is directly connected, Gig0/0\n\
-                S  0.0.0.0/0 [1/0] via 192.168.1.254",
-            );
-        }
-        _ => {
-            valid = false;
-        }
+    if input.is_empty() {
+        term.prompt = switch_mode(&term.mode);
+        return;
     }
 
-    let new_mode = match term.input.as_str() {
-        "enable" | "en" => {
-            if term.mode == CiscoTerminalMode::UserExec {
-                CiscoTerminalMode::PrivilegedExec
-            } else {
-                term.output = "\nYou are not in the User mode.".to_string();
-                term.mode.clone()
-            }
-        }
-        "disable" | "dis" => CiscoTerminalMode::UserExec,
-        "line vty 0 4" => {
-            if term.mode == CiscoTerminalMode::PrivilegedExec {
-                CiscoTerminalMode::LineConfig
-            } else {
-                term.output = "\nYou are not in the Priviledged mode.".to_string();
-                term.mode.clone()
-            }
-        }
-        "configure terminal" | "conf t" => {
-            if term.mode == CiscoTerminalMode::PrivilegedExec {
-                CiscoTerminalMode::GlobalConfig
-            } else {
-                term.output = "\nYou are not in the Priviledged mode.".to_string();
-                term.mode.clone()
-            }
-        }          
-        s if s.starts_with("configure interface ") => {
-            let interface = &s["configure interface ".len()..];
-            CiscoTerminalMode::InterfaceConfig(interface.to_string())
-        }
-        "exit" => {
-            println!("EXIT was pressed\n");
-            term.end = true;
-            term.mode.clone()
-        }
-        "" => {
-            term.output = term.input.clone();
-            term.mode.clone()
-        }
-        _ => {
-            if !valid {
-                term.output = format!("\n{}: command not found", term.input.clone());
-            }
-            term.mode.clone()
-        }
+    let tokens: Vec<&str> = input.split_whitespace().collect();
+    // Clone the mode so the match borrows a local, not `term.mode`,
+    // which we reassign inside the arms.
+    let mode = term.mode.clone();
+    let mut known = true;
+
+    match mode {
+        CiscoTerminalMode::UserExec => match tokens[0] {
+            "disable" => {}
+            "enable" | "en" => term.mode = CiscoTerminalMode::PrivilegedExec,
+            "exit" => term.end = true,
+            "configure" | "conf" => match configure_target(&tokens) {
+                Some(m) => term.mode = m,
+                None => known = false,
+            },
+            _ => known = false,
+        },
+
+        CiscoTerminalMode::PrivilegedExec => match tokens[0] {
+            "disable" => term.mode = CiscoTerminalMode::UserExec,
+            "exit" => term.end = true,
+            "configure" | "conf" => match configure_target(&tokens) {
+                Some(m) => term.mode = m,
+                None => known = false,
+            },
+            _ => known = false,
+        },
+
+        CiscoTerminalMode::GlobalConfig => match tokens[0] {
+            "exit" | "end" => term.mode = CiscoTerminalMode::PrivilegedExec,
+            "interface" | "int" => match tokens.get(1) {
+                Some(name) => {
+                    term.mode = CiscoTerminalMode::InterfaceConfig((*name).to_string())
+                }
+                None => known = false,
+            },
+            "line" => match tokens.get(1) {
+                Some(_) => term.mode = CiscoTerminalMode::LineConfig,
+                None => known = false,
+            },
+            _ => known = false,
+        },
+
+        CiscoTerminalMode::LineConfig => match tokens[0] {
+            "exit" => term.mode = CiscoTerminalMode::GlobalConfig,
+            "end" => term.mode = CiscoTerminalMode::PrivilegedExec,
+            _ => known = false,
+        },
+
+        CiscoTerminalMode::InterfaceConfig(_) => match tokens[0] {
+            "exit" => term.mode = CiscoTerminalMode::GlobalConfig,
+            "end" => term.mode = CiscoTerminalMode::PrivilegedExec,
+            _ => known = false,
+        },
+    }
+
+    term.output = if known {
+        input
+    } else {
+        format!("\n{input}: command not found")
     };
 
-    term.mode = new_mode.clone();
-    term.prompt = switch_mode(&new_mode);
-    term
+    term.prompt = switch_mode(&term.mode);
 }
 
 
@@ -155,125 +130,88 @@ pub fn terminal(term: &mut Terminal) -> &mut Terminal {
 mod tests {
     use super::*;
 
+    /// Builds a Terminal in the given mode, feeds it `input`, and returns it after processing.
+    fn run(mode: CiscoTerminalMode, prompt: &str, input: &str) -> Terminal {
+        let mut term = Terminal {
+            mode,
+            prompt: prompt.to_string(),
+            input: input.to_string(),
+            output: String::new(),
+            end: false,
+        };
+        terminal(&mut term);
+        term
+    }
+
     #[test]
     fn test_switch_mode_output() {
-        let mode1 = CiscoTerminalMode::GlobalConfig;
-        let output1 = switch_mode(&mode1);
-        assert_eq!(output1.trim(), "router(config)#");
+        let cases = [
+            (CiscoTerminalMode::GlobalConfig, "router(config)#"),
+            (CiscoTerminalMode::LineConfig, "router(config-line)#"),
+            (
+                CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string()),
+                "router(config-if)#",
+            ),
+            (CiscoTerminalMode::PrivilegedExec, "router#"),
+            (CiscoTerminalMode::UserExec, "router>"),
+        ];
 
-        let mode2 = CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string());
-        let output2 = switch_mode(&mode2);
-        assert_eq!(output2.trim(), "router(config-if)#");
-
-        let mode3 = CiscoTerminalMode::PrivilegedExec;
-        let output3 = switch_mode(&mode3);
-        assert_eq!(output3.trim(), "router#");
-
-        let mode4 = CiscoTerminalMode::UserExec;
-        let output4 = switch_mode(&mode4);
-        assert_eq!(output4.trim(), "router>");
+        for (mode, expected) in cases {
+            assert_eq!(switch_mode(&mode).trim(), expected, "mode: {:?}", mode);
+        }
     }
 
     #[test]
-    fn test_terminal_function() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "disable".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::UserExec);
-        assert_eq!(term.prompt.trim(), "router>");
-        assert_eq!(term.output, "disable");
+    fn test_mode_transitions_from_user_exec() {
+        let cases = [
+            ("disable", CiscoTerminalMode::UserExec, "router>"),
+            ("enable", CiscoTerminalMode::PrivilegedExec, "router#"),
+            ("en", CiscoTerminalMode::PrivilegedExec, "router#"),
+            ("configure terminal", CiscoTerminalMode::GlobalConfig, "router(config)#"),
+            ("conf t", CiscoTerminalMode::GlobalConfig, "router(config)#"),
+            (
+                "configure interface gi0/0/0",
+                CiscoTerminalMode::InterfaceConfig("gi0/0/0".to_string()),
+                "router(config-if)#",
+            ),
+            (
+                "configure interface gi0/0/1",
+                CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string()),
+                "router(config-if)#",
+            ),
+        ];
 
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "enable".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
-        assert_eq!(term.prompt.trim(), "router#");
-        assert_eq!(term.output, "enable");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "configure terminal".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::GlobalConfig);
-        assert_eq!(term.prompt.trim(), "router(config)#");
-        assert_eq!(term.output, "configure terminal");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "configure interface gi0/0/0".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::InterfaceConfig("gi0/0/0".to_string()));
-        assert_eq!(term.prompt.trim(), "router(config-if)#");
-        assert_eq!(term.output, "configure interface gi0/0/0");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "en".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
-        assert_eq!(term.prompt.trim(), "router#");
-        assert_eq!(term.output, "en");
-
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "conf t".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::GlobalConfig);
-        assert_eq!(term.prompt.trim(), "router(config)#");
-        assert_eq!(term.output, "conf t");
+        for (input, expected_mode, expected_prompt) in cases {
+            let term = run(CiscoTerminalMode::UserExec, "router>", input);
+            assert_eq!(term.mode, expected_mode, "input: {input:?}");
+            assert_eq!(term.prompt.trim(), expected_prompt, "input: {input:?}");
+            assert_eq!(term.output, input, "input: {input:?}");
+        }
     }
 
     #[test]
-    fn test_unknown_terminal_mode() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "UnknownMode".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
+    fn test_line_config_transition() {
+        let term = run(CiscoTerminalMode::GlobalConfig, "router(config)#", "line vty 0 4");
+        assert_eq!(term.mode, CiscoTerminalMode::LineConfig);
+        assert_eq!(term.prompt.trim(), "router(config-line)#");
+        assert_eq!(term.output, "line vty 0 4");
+
+        let term = run(CiscoTerminalMode::LineConfig, "router(config-line)#", "exit");
+        assert_eq!(term.mode, CiscoTerminalMode::GlobalConfig);
+        assert_eq!(term.prompt.trim(), "router(config)#");
+    }
+
+    #[test]
+    fn test_unknown_command_in_user_exec() {
+        let term = run(CiscoTerminalMode::UserExec, "router>", "UnknownMode");
         assert_eq!(term.mode, CiscoTerminalMode::UserExec);
         assert_eq!(term.prompt.trim(), "router>");
         assert_eq!(term.output, "\nUnknownMode: command not found");
     }
 
     #[test]
-    fn test_mode_stays_same() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::PrivilegedExec,
-            prompt: "router#".to_string(),
-            input: "UnknownMode".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
+    fn test_unknown_command_keeps_privileged_exec() {
+        let term = run(CiscoTerminalMode::PrivilegedExec, "router#", "UnknownMode");
         assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
         assert_eq!(term.prompt.trim(), "router#");
         assert_eq!(term.output, "\nUnknownMode: command not found");
@@ -281,32 +219,10 @@ mod tests {
 
     #[test]
     fn test_empty_input() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
+        let term = run(CiscoTerminalMode::UserExec, "router>", "");
         assert_eq!(term.mode, CiscoTerminalMode::UserExec);
         assert_eq!(term.prompt.trim(), "router>");
         assert_eq!(term.output, "");
-    }
-
-    #[test]
-    fn test_interface_config_mode() {
-        let mut term = Terminal {
-            mode: CiscoTerminalMode::UserExec,
-            prompt: "router>".to_string(),
-            input: "configure interface gi0/0/1".to_string(),
-            output: "".to_string(),
-            end: false,
-        };
-        terminal(&mut term);
-        assert_eq!(term.mode, CiscoTerminalMode::InterfaceConfig("gi0/0/1".to_string()));
-        assert_eq!(term.prompt.trim(), "router(config-if)#");
-        assert_eq!(term.output, "configure interface gi0/0/1");
     }
 
     #[test]
@@ -315,11 +231,11 @@ mod tests {
             mode: CiscoTerminalMode::UserExec,
             prompt: "router>".to_string(),
             input: "exit".to_string(),
-            output: "".to_string(),
+            output: String::new(),
             end: false,
         };
-        assert_eq!(term.end, false);
+        assert!(!term.end);
         terminal(&mut term);
-        assert_eq!(term.end, true);
+        assert!(term.end);
     }
 }

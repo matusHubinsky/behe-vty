@@ -1,11 +1,21 @@
 [package]
-name = "cisco-terminal"
-version = "0.1.0"
-edition = "2021"
+name = "behe-vty"
+version = "0.1.1"
+authors = ["Matus Hubinsky"]
+edition = '2024'
+description = "Terminal wrapper that provides the autocomplete into the Cisco terminal."
+readme = "README.md"
+repository = "https://github.com/matusHubinsky/behe-vty"
+license = "EUPL-1.2"
+keywords = ["networking", "termina", "console", "auto-complete"]
+publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cursive = { version = "*", features = ["toml"] }
-log = "0.4"
-env_logger = "0.9"
+cursive = { version = "0.21", features = ["toml"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_yml = "0.0.12"
+dirs = "7"
+serialport = { version = "4.10.1", default-features = false } 

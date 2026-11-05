@@ -1,0 +1,32 @@
+user_exec:
+  - show version
+  - show interfaces
+  - show chassis
+  - ping
+  - traceroute
+  - exit
+privileged_exec:
+  - configure
+  - show configuration
+  - commit
+  - commit check
+  - rollback
+  - show version
+  - exit
+global_config:
+  - set
+  - delete
+  - show
+  - commit
+  - exit
+  - end
+line_config:
+  - set
+  - delete
+  - exit
+  - end
+interface_config:
+  - set
+  - delete
+  - exit
+  - end
