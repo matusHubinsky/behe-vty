@@ -20,7 +20,7 @@ use cursive::traits::*;
 use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::cisco;
@@ -29,7 +29,7 @@ use crate::database::{Database, Device};
 use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
-const CURSOR_FPS: u32 = 15;
+const CURSOR_FPS: u32 = 5;
 
 // ---------------------------------------------------------------- colour schemes
 
@@ -364,6 +364,11 @@ impl InputView {
                             &buffer,
                             &format!("% {desc} connecting... (type 'disconnect' to close)\n"),
                         );
+                        // The input line shows a static session label; remote
+                        // output (incl. Cisco status messages) stays in the scrollback.
+                        s.call_on_name("prompt", |v: &mut TextView| {
+                            v.set_content(format!("{desc} "));
+                        });
                     }
                     Ok(_) => append_output(s, &buffer, &format!("% {label} opened\n")),
                     Err(e) => append_output(s, &buffer, &format!("% {label} failed: {e}\n")),
@@ -374,6 +379,7 @@ impl InputView {
         // `disconnect` closes the active remote session (PuTTY: close window).
         if input.trim() == "disconnect" {
             let buffer = Arc::clone(&self.output_buffer);
+            let terminal = Arc::clone(&self.terminal);
             let closed = {
                 let mut guard = self.session.lock().unwrap();
                 guard.take().map(|s| {
@@ -388,6 +394,10 @@ impl InputView {
                     "% no active remote session\n"
                 };
                 append_output(s, &buffer, msg);
+                let prompt = terminal.lock().unwrap().prompt.clone();
+                s.call_on_name("prompt", |v: &mut TextView| {
+                    v.set_content(prompt);
+                });
             });
         }
 
@@ -788,6 +798,9 @@ fn connection_dialog(
                                 // Switch the autocomplete tree to the selected vendor.
                                 *cmds2.write().unwrap() = CommandTree::load(vendor);
                                 append_output(s, &out2, &format!("% {desc} connected — session active (type 'disconnect' to close)\n"));
+                                s.call_on_name("prompt", |v: &mut TextView| {
+                                    v.set_content(format!("{desc} "));
+                                });
                             }
                             Ok(_) => append_output(s, &out2, &format!("% {host}:{port} opened\n")),
                             Err(e) => append_output(s, &out2, &format!("% {host}:{port} failed: {e}\n")),
@@ -821,12 +834,39 @@ fn make_notifier(
     sink: cursive::CbSink,
     output_buffer: Arc<Mutex<String>>,
     session: Arc<Mutex<Option<networking::RemoteSession>>>,
+    terminal: Arc<Mutex<cisco::Terminal>>,
 ) -> networking::Notify {
+    // Coalesce + throttle: at most one UI refresh in flight and at most ~20/s,
+    // so a chatty telnet/ssh stream cannot flood the event loop with a full
+    // scrollback re-render per chunk.
+    let pending = Arc::new(AtomicBool::new(false));
+    let last_sent = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
     Arc::new(move || {
+        if pending.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let closed = session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|sess| sess.is_closed())
+            .unwrap_or(false);
+        {
+            let mut last = last_sent.lock().unwrap();
+            let now = std::time::Instant::now();
+            if !closed && now.duration_since(*last) < std::time::Duration::from_millis(50) {
+                pending.store(false, Ordering::SeqCst);
+                return;
+            }
+            *last = now;
+        }
         let output_buffer = Arc::clone(&output_buffer);
         let session = Arc::clone(&session);
+        let terminal = Arc::clone(&terminal);
+        let pending = Arc::clone(&pending);
         let sink = sink.clone();
         let _ = sink.send(Box::new(move |s: &mut Cursive| {
+            pending.store(false, Ordering::SeqCst);
             let mut text = String::new();
             let mut closed_status = None;
             {
@@ -839,6 +879,8 @@ fn make_notifier(
                     }
                 }
             }
+            // All remote output goes to the scrollback only — never to the
+            // input line's prompt view (Cisco status messages would land there).
             if !text.is_empty() {
                 let snapshot = {
                     let mut out = output_buffer.lock().unwrap();
@@ -846,11 +888,7 @@ fn make_notifier(
                     out.clone()
                 };
                 s.call_on_name("terminal_output", |v: &mut TextView| {
-                    v.set_content(snapshot.clone());
-                });
-                let current = snapshot.rsplit('\n').next().unwrap_or("").to_string();
-                s.call_on_name("prompt", |v: &mut TextView| {
-                    v.set_content(current);
+                    v.set_content(snapshot);
                 });
             }
             if let Some(status) = closed_status {
@@ -859,6 +897,10 @@ fn make_notifier(
                     &output_buffer,
                     &format!("% session closed by remote host ({status})\n"),
                 );
+                let prompt = terminal.lock().unwrap().prompt.clone();
+                s.call_on_name("prompt", |v: &mut TextView| {
+                    v.set_content(prompt);
+                });
             }
         }));
     })
@@ -894,6 +936,7 @@ pub fn run() {
         siv.cb_sink().clone(),
         Arc::clone(&output_buffer),
         Arc::clone(&session),
+        Arc::clone(&terminal),
     );
 
     let text_view = TextView::new("")
