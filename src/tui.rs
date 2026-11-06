@@ -212,6 +212,8 @@ struct InputView {
     scheme: Arc<AtomicUsize>,
     commands: Arc<RwLock<CommandTree>>,
     database: Arc<Mutex<Database>>,
+    session: Arc<Mutex<Option<networking::RemoteSession>>>,
+    notify: networking::Notify,
 }
 
 impl InputView {
@@ -222,6 +224,8 @@ impl InputView {
         scheme: Arc<AtomicUsize>,
         commands: Arc<RwLock<CommandTree>>,
         database: Arc<Mutex<Database>>,
+        session: Arc<Mutex<Option<networking::RemoteSession>>>,
+        notify: networking::Notify,
     ) -> Self {
         Self {
             content: String::new(),
@@ -233,6 +237,8 @@ impl InputView {
             scheme,
             commands,
             database,
+            session,
+            notify,
         }
     }
 
@@ -244,7 +250,10 @@ impl InputView {
 
     fn matches(&self) -> Vec<String> {
         let term = self.terminal.lock().unwrap();
-        self.commands.read().unwrap().autocomplete(&term.mode, &self.content)
+        self.commands
+            .read()
+            .unwrap()
+            .autocomplete(&term.mode, &self.content)
     }
 
     fn update_ghost(&mut self) {
@@ -323,6 +332,65 @@ impl InputView {
         self.history.lock().unwrap().add_line(input.clone());
         let _ = self.database.lock().unwrap().add_history("local", &input);
 
+        // `ssh` / `telnet` commands open (or replace) a live remote session.
+        if let Some(endpoint) = networking::parse_remote_command(&input) {
+            let buffer = Arc::clone(&self.output_buffer);
+            let session = Arc::clone(&self.session);
+            let notify = Arc::clone(&self.notify);
+            return EventResult::with_cb(move |s| {
+                if let Some(old) = session.lock().unwrap().take() {
+                    old.shutdown();
+                }
+                let size = s.screen_size();
+                let cols = size.x.saturating_sub(4).max(20) as u16;
+                let rows = size.y.saturating_sub(6).max(5) as u16;
+                let label = match &endpoint {
+                    networking::Endpoint::Remote {
+                        protocol,
+                        host,
+                        port,
+                        ..
+                    } => {
+                        format!("{} {}:{}", protocol.label(), host, port)
+                    }
+                    networking::Endpoint::Serial { path, .. } => format!("serial {path}"),
+                };
+                match networking::connect(&endpoint, Some(Arc::clone(&notify)), (cols, rows)) {
+                    Ok(networking::Transport::Remote(sess)) => {
+                        let desc = sess.describe();
+                        *session.lock().unwrap() = Some(sess);
+                        append_output(
+                            s,
+                            &buffer,
+                            &format!("% {desc} connecting... (type 'disconnect' to close)\n"),
+                        );
+                    }
+                    Ok(_) => append_output(s, &buffer, &format!("% {label} opened\n")),
+                    Err(e) => append_output(s, &buffer, &format!("% {label} failed: {e}\n")),
+                }
+            });
+        }
+
+        // `disconnect` closes the active remote session (PuTTY: close window).
+        if input.trim() == "disconnect" {
+            let buffer = Arc::clone(&self.output_buffer);
+            let closed = {
+                let mut guard = self.session.lock().unwrap();
+                guard.take().map(|s| {
+                    s.shutdown();
+                    true
+                })
+            };
+            return EventResult::with_cb(move |s| {
+                let msg = if closed.unwrap_or(false) {
+                    "% session disconnected\n"
+                } else {
+                    "% no active remote session\n"
+                };
+                append_output(s, &buffer, msg);
+            });
+        }
+
         // Connection / diagnostic commands are handled by networking,
         // not by the cisco simulator.
         if let Some(reply) = networking::handle_command(&input) {
@@ -331,6 +399,13 @@ impl InputView {
             return EventResult::with_cb(move |s| {
                 append_output(s, &buffer, &format!("{prompt} {input}\n{reply}\n"));
             });
+        }
+
+        // With a live remote session the line goes to the device (Enter = CR),
+        // like in PuTTY; the device echoes it and prints its own reply.
+        if let Some(sess) = self.session.lock().unwrap().as_ref() {
+            sess.send(format!("{input}\r").as_bytes());
+            return EventResult::consumed();
         }
 
         let (old_prompt, new_prompt, reply, end): (String, String, String, bool) = {
@@ -557,6 +632,8 @@ fn connection_dialog(
     db: &Arc<Mutex<Database>>,
     output_buffer: &Arc<Mutex<String>>,
     commands: &Arc<RwLock<CommandTree>>,
+    session: &Arc<Mutex<Option<networking::RemoteSession>>>,
+    notify: &networking::Notify,
 ) {
     let saved = db.lock().unwrap().list_devices().unwrap_or_default();
 
@@ -564,6 +641,29 @@ fn connection_dialog(
     for d in saved {
         sessions.add_item(format!("{:<14} {}:{}", d.name, d.host, d.port), d);
     }
+    // Picking a saved session loads it into the form (like PuTTY); the form
+    // fields are then the single source of truth for the "Open" button.
+    sessions.set_on_select(|s, d: &Device| {
+        let _ = s.call_on_name("host", |v: &mut EditView| v.set_content(d.host.clone()));
+        let _ = s.call_on_name("port", |v: &mut EditView| v.set_content(d.port.to_string()));
+        let _ = s.call_on_name("user", |v: &mut EditView| v.set_content(d.username.clone()));
+        let proto = match d.protocol.as_str() {
+            "serial" => networking::Protocol::Serial,
+            "telnet" => networking::Protocol::Telnet,
+            _ => networking::Protocol::Ssh,
+        };
+        let _ = s.call_on_name("proto", |v: &mut SelectView<networking::Protocol>| {
+            if let Some(i) = (0..v.len()).find(|&i| v.get_item(i).map(|(_, p)| *p == proto).unwrap_or(false)) {
+                v.set_selection(i);
+            }
+        });
+        let vendor = Vendor::parse(&d.vendor);
+        let _ = s.call_on_name("vendor", |v: &mut SelectView<Vendor>| {
+            if let Some(i) = (0..v.len()).find(|&i| v.get_item(i).map(|(_, x)| *x == vendor).unwrap_or(false)) {
+                v.set_selection(i);
+            }
+        });
+    });
 
     let mut proto = SelectView::<networking::Protocol>::new();
     proto.add_item("serial", networking::Protocol::Serial);
@@ -580,37 +680,48 @@ fn connection_dialog(
     let form = LinearLayout::vertical()
         .child(TextView::new("Saved sessions:"))
         .child(ScrollView::new(sessions.with_name("sessions")).fixed_height(10))
-        .child(LinearLayout::horizontal()
-            .child(TextView::new("Protocol:  "))
-            .child(proto.with_name("proto")))
-        .child(LinearLayout::horizontal()
-            .child(TextView::new("Device:    "))
-            .child(vendor_sel.with_name("vendor")))
-        .child(LinearLayout::horizontal()
-            .child(TextView::new("Host/path: "))
-            .child(EditView::new().with_name("host").fixed_width(48)))
-        .child(LinearLayout::horizontal()
-            .child(TextView::new("Port/baud: "))
-            .child(EditView::new().with_name("port").fixed_width(10)))
-        .child(LinearLayout::horizontal()
-            .child(TextView::new("Username:  "))
-            .child(EditView::new().with_name("user").fixed_width(24)));
+        .child(
+            LinearLayout::horizontal()
+                .child(TextView::new("Protocol:  "))
+                .child(proto.with_name("proto")),
+        )
+        .child(
+            LinearLayout::horizontal()
+                .child(TextView::new("Device:    "))
+                .child(vendor_sel.with_name("vendor")),
+        )
+        .child(
+            LinearLayout::horizontal()
+                .child(TextView::new("Host/path: "))
+                .child(EditView::new().with_name("host").fixed_width(48)),
+        )
+        .child(
+            LinearLayout::horizontal()
+                .child(TextView::new("Port/baud: "))
+                .child(EditView::new().with_name("port").fixed_width(10)),
+        )
+        .child(
+            LinearLayout::horizontal()
+                .child(TextView::new("Username:  "))
+                .child(EditView::new().with_name("user").fixed_width(24)),
+        )
+        .child(
+            LinearLayout::horizontal()
+                .child(TextView::new("Password:  "))
+                .child(EditView::new().secret().with_name("pass").fixed_width(24)),
+        );
 
     let db2 = Arc::clone(db);
     let out2 = Arc::clone(output_buffer);
     let cmds2 = Arc::clone(commands);
+    let session2 = Arc::clone(session);
+    let notify2 = Arc::clone(notify);
 
     s.add_layer(
         Dialog::around(form)
             .title("Open connection")
             .padding(Margins::lrtb(1, 1, 1, 1))
             .button("Open", move |s| {
-                let picked: Option<Device> = s
-                    .call_on_name("sessions", |v: &mut SelectView<Device>| {
-                        v.selected_id().and_then(|i| v.get_item(i).map(|(_, d)| d.clone()))
-                    })
-                    .flatten();
-
                 let proto = s
                     .call_on_name("proto", |v: &mut SelectView<networking::Protocol>| {
                         v.selected_id().and_then(|i| v.get_item(i).map(|(_, p)| *p))
@@ -627,6 +738,9 @@ fn connection_dialog(
                 let user = s
                     .call_on_name("user", |v: &mut EditView| v.get_content().to_string())
                     .unwrap_or_default();
+                let pass = s
+                    .call_on_name("pass", |v: &mut EditView| v.get_content().to_string())
+                    .unwrap_or_default();
 
                 let vendor = s
                     .call_on_name("vendor", |v: &mut SelectView<Vendor>| {
@@ -635,21 +749,8 @@ fn connection_dialog(
                     .flatten()
                     .unwrap_or(Vendor::Cisco);
 
-                let (name, host, port, proto, vendor, user) = match picked {
-                    Some(d) => {
-                        let p = match d.protocol.as_str() {
-                            "serial" => networking::Protocol::Serial,
-                            "telnet" => networking::Protocol::Telnet,
-                            _ => networking::Protocol::Ssh,
-                        };
-                        (d.name, d.host, d.port, p, Vendor::parse(&d.vendor), d.username)
-                    }
-                    None => {
-                        let port = port_txt.parse().unwrap_or(proto.default_port());
-                        let name = if host.is_empty() { "adhoc".to_string() } else { host.clone() };
-                        (name, host, port, proto, vendor, user)
-                    }
-                };
+                let port = port_txt.parse().unwrap_or(proto.default_port());
+                let name = if host.is_empty() { "adhoc".to_string() } else { host.clone() };
 
                 let endpoint = match proto {
                     networking::Protocol::Serial => networking::Endpoint::Serial {
@@ -661,29 +762,42 @@ fn connection_dialog(
                         host: host.clone(),
                         port,
                         username: user.clone(),
+                        password: pass,
                         vendor,
                     },
                 };
 
-                let msg = match endpoint.check() {
-                    Ok(()) => {
-                        let dev = Device {
-                            name: name.clone(),
-                            host: host.clone(),
-                            port,
-                            protocol: proto.label().to_string(),
-                            vendor: vendor.label().to_lowercase(),
-                            username: user.clone(),
-                        };
-                        let _ = db2.lock().unwrap().save_device(&dev);
-                        // Switch the autocomplete tree to the selected vendor.
-                        *cmds2.write().unwrap() = CommandTree::load(vendor);
-                        format!("% {name} {host}:{port} reachable — session plumbing TODO, local simulator")
+                match &endpoint {
+                    networking::Endpoint::Remote { host, port, .. } => {
+                        let size = s.screen_size();
+                        let cols = size.x.saturating_sub(4).max(20) as u16;
+                        let rows = size.y.saturating_sub(6).max(5) as u16;
+                        match networking::connect(&endpoint, Some(Arc::clone(&notify2)), (cols, rows)) {
+                            Ok(networking::Transport::Remote(sess)) => {
+                                let desc = sess.describe();
+                                *session2.lock().unwrap() = Some(sess);
+                                let dev = Device {
+                                    name: name.clone(),
+                                    host: host.clone(),
+                                    port: *port,
+                                    protocol: proto.label().to_string(),
+                                    vendor: vendor.label().to_lowercase(),
+                                    username: user.clone(),
+                                };
+                                let _ = db2.lock().unwrap().save_device(&dev);
+                                // Switch the autocomplete tree to the selected vendor.
+                                *cmds2.write().unwrap() = CommandTree::load(vendor);
+                                append_output(s, &out2, &format!("% {desc} connected — session active (type 'disconnect' to close)\n"));
+                            }
+                            Ok(_) => append_output(s, &out2, &format!("% {host}:{port} opened\n")),
+                            Err(e) => append_output(s, &out2, &format!("% {host}:{port} failed: {e}\n")),
+                        }
                     }
-                    Err(e) => format!("% {host}:{port} unreachable: {e}"),
-                };
-
-                append_output(s, &out2, &format!("{msg}\n"));
+                    networking::Endpoint::Serial { path, baud } => match endpoint.check() {
+                        Ok(()) => append_output(s, &out2, &format!("% console {path} @ {baud} baud opened (session plumbing TODO)\n")),
+                        Err(e) => append_output(s, &out2, &format!("% cannot open console {path}: {e}\n")),
+                    },
+                }
                 s.pop_layer();
             })
             .button("Local simulator", |s| {
@@ -695,12 +809,60 @@ fn connection_dialog(
 
 // ---------------------------------------------------------------- run
 
+/// Bridges the session thread to the UI: drain new device output into the
+/// scrollback, keep the prompt view on the device's current line, and drop
+/// the session when the remote closes it.
+fn make_notifier(
+    sink: cursive::CbSink,
+    output_buffer: Arc<Mutex<String>>,
+    session: Arc<Mutex<Option<networking::RemoteSession>>>,
+) -> networking::Notify {
+    Arc::new(move || {
+        let output_buffer = Arc::clone(&output_buffer);
+        let session = Arc::clone(&session);
+        let sink = sink.clone();
+        let _ = sink.send(Box::new(move |s: &mut Cursive| {
+            let mut text = String::new();
+            let mut closed_status = None;
+            {
+                let mut guard = session.lock().unwrap();
+                if let Some(sess) = guard.as_ref() {
+                    text = sess.poll_output();
+                    if sess.is_closed() {
+                        closed_status = Some(sess.status());
+                        guard.take();
+                    }
+                }
+            }
+            if !text.is_empty() {
+                let snapshot = {
+                    let mut out = output_buffer.lock().unwrap();
+                    out.push_str(&text);
+                    out.clone()
+                };
+                s.call_on_name("terminal_output", |v: &mut TextView| {
+                    v.set_content(snapshot.clone());
+                });
+                let current = snapshot.rsplit('\n').next().unwrap_or("").to_string();
+                s.call_on_name("prompt", |v: &mut TextView| {
+                    v.set_content(current);
+                });
+            }
+            if let Some(status) = closed_status {
+                append_output(
+                    s,
+                    &output_buffer,
+                    &format!("% session closed by remote host ({status})\n"),
+                );
+            }
+        }));
+    })
+}
+
 pub fn run() {
     let mut siv = Cursive::default();
 
-    let database = Arc::new(Mutex::new(
-        Database::open().expect("cannot open database"),
-    ));
+    let database = Arc::new(Mutex::new(Database::open().expect("cannot open database")));
     let commands = Arc::new(RwLock::new(CommandTree::load(Vendor::Cisco)));
 
     let past = database
@@ -722,13 +884,19 @@ pub fn run() {
     }));
 
     let output_buffer = Arc::new(Mutex::new(String::new()));
+    let session: Arc<Mutex<Option<networking::RemoteSession>>> = Arc::new(Mutex::new(None));
+    let notify = make_notifier(
+        siv.cb_sink().clone(),
+        Arc::clone(&output_buffer),
+        Arc::clone(&session),
+    );
 
     let text_view = TextView::new("")
         .style(ColorStyle::new(initial.fg, initial.bg))
         .with_name("terminal_output");
 
-    let terminal_output = ScrollView::new(text_view)
-        .scroll_strategy(cursive::view::ScrollStrategy::StickToBottom);
+    let terminal_output =
+        ScrollView::new(text_view).scroll_strategy(cursive::view::ScrollStrategy::StickToBottom);
 
     let input_view = InputView::new(
         Arc::clone(&terminal),
@@ -737,6 +905,8 @@ pub fn run() {
         Arc::clone(&scheme_index),
         Arc::clone(&commands),
         Arc::clone(&database),
+        Arc::clone(&session),
+        Arc::clone(&notify),
     );
 
     let initial_prompt = terminal.lock().unwrap().prompt.clone();
@@ -766,10 +936,16 @@ pub fn run() {
             .padding(Margins::lrtb(1, 1, 1, 1)), // keep padding; no title bar = max rows
     );
 
-
     apply_scheme(&mut siv, 0);
 
-    connection_dialog(&mut siv, &database, &output_buffer, &commands);
+    connection_dialog(
+        &mut siv,
+        &database,
+        &output_buffer,
+        &commands,
+        &session,
+        &notify,
+    );
 
     // Ctrl+T: cycle through the colour schemes.
     {
