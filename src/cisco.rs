@@ -32,11 +32,11 @@ pub struct Terminal {
 
 pub fn switch_mode(mode: &CiscoTerminalMode) -> String {
     match mode {
-        CiscoTerminalMode::UserExec => "router>".to_string(),
-        CiscoTerminalMode::PrivilegedExec => "router#".to_string(),
-        CiscoTerminalMode::GlobalConfig => "router(config)#".to_string(),
-        CiscoTerminalMode::LineConfig => "router(config-line)#".to_string(),
-        CiscoTerminalMode::InterfaceConfig(_) => "router(config-if)#".to_string(),
+        CiscoTerminalMode::UserExec => ">".to_string(),
+        CiscoTerminalMode::PrivilegedExec => "#".to_string(),
+        CiscoTerminalMode::GlobalConfig => "(config)#".to_string(),
+        CiscoTerminalMode::LineConfig => "config-line)#".to_string(),
+        CiscoTerminalMode::InterfaceConfig(_) => "(config-if)#".to_string(),
     }
 }
 

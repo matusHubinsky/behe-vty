@@ -29,7 +29,7 @@ use crate::database::{Database, Device};
 use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
-const CURSOR_FPS: u32 = 5;
+const CURSOR_FPS: u32 = 15;
 
 // ---------------------------------------------------------------- colour schemes
 
@@ -882,7 +882,7 @@ pub fn run() {
 
     let terminal = Arc::new(Mutex::new(cisco::Terminal {
         mode: cisco::CiscoTerminalMode::UserExec,
-        prompt: "router>".to_string(),
+        prompt: ">".to_string(),
         input: String::new(),
         output: String::new(),
         end: false,
