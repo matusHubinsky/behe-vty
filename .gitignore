@@ -2,3 +2,5 @@ target/
 target/*
 target/debug/*
 .backup.*
+src/.backup.*
+src/.backup.*
