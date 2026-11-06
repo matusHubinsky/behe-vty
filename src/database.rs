@@ -173,10 +173,19 @@ mod tests {
     use super::*;
 
     fn test_db() -> Database {
-        let path = std::env::temp_dir().join(format!("behe-vty-test-{}.db", std::process::id()));
+        Database::open_at(&test_db_path()).unwrap()
+    }
+
+    fn test_db_path() -> std::path::PathBuf {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT: AtomicUsize = AtomicUsize::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "behe-vty-test-{}-{}.db",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::SeqCst)
+        ));
         let _ = std::fs::remove_file(&path);
-        // std::env::set_var("BEHE_VTY_DB", &path);
-        Database::open().unwrap()
+        path
     }
 
     #[test]
@@ -204,9 +213,17 @@ mod tests {
     #[test]
     fn test_devices_upsert_and_delete() {
         let db = test_db();
-        db.save_device("core", "10.0.0.1", 22).unwrap();
-        db.save_device("core", "10.0.0.2", 23).unwrap(); // upsert, not duplicate
-        db.save_device("edge", "10.0.0.9", 23).unwrap();
+        let dev = |name: &str, host: &str, port: u16| Device {
+            name: name.to_string(),
+            host: host.to_string(),
+            port,
+            protocol: "ssh".to_string(),
+            vendor: "cisco".to_string(),
+            username: String::new(),
+        };
+        db.save_device(&dev("core", "10.0.0.1", 22)).unwrap();
+        db.save_device(&dev("core", "10.0.0.2", 23)).unwrap(); // upsert, not duplicate
+        db.save_device(&dev("edge", "10.0.0.9", 23)).unwrap();
 
         let core = db.get_device("core").unwrap().unwrap();
         assert_eq!((core.host.as_str(), core.port), ("10.0.0.2", 23));
@@ -221,13 +238,18 @@ mod tests {
 
     #[test]
     fn test_migrations_applied_once() {
-        let db = test_db();
-        let again = Database::open().unwrap(); // re-open same file
-        let n: i64 = again
-            .conn
-            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(n, 1);
+        let path = test_db_path();
+        let db = Database::open_at(&path).unwrap();
+        let count = |d: &Database| -> i64 {
+            d.conn
+                .query_row("SELECT COUNT(*) FROM schema_migrations", [], |r| r.get(0))
+                .unwrap()
+        };
+        let before = count(&db);
+        let again = Database::open_at(&path).unwrap(); // re-open same file
+        let after = count(&again);
+        assert_eq!(before, after, "re-opening must not re-apply migrations");
+        assert!(after >= 1);
         drop(db);
     }
 }
