@@ -139,10 +139,11 @@ dependencies = [
 
 [[package]]
 name = "behe-vty"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "cursive",
  "dirs",
+ "rand",
  "rusqlite",
  "russh",
  "serde",

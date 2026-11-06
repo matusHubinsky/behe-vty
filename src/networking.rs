@@ -86,7 +86,6 @@ impl Endpoint {
 
 /// Where the terminal session is attached.
 pub enum Transport {
-    Local,                                          // cisco::terminal() simulator
     Serial(Box<dyn serialport::SerialPort + Send>), // console cable
     Remote(RemoteSession),                          // live ssh / telnet session
 }
@@ -181,17 +180,14 @@ pub fn connect(
         .check()
         .map_err(|e| io::Error::new(e.kind(), format!("{endpoint:?} unreachable: {e}")))?;
     match endpoint {
-        Endpoint::Serial { .. } => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "serial sessions open via open_console()",
-        )),
+        Endpoint::Serial { path, baud } => Ok(Transport::Serial(open_console(path, *baud)?)),
         Endpoint::Remote {
             protocol,
             host,
             port,
             username,
             password,
-            ..
+            vendor,
         } => {
             let notify = notify.unwrap_or_else(|| Arc::new(|| {}));
             Ok(Transport::Remote(RemoteSession::spawn(
@@ -200,6 +196,7 @@ pub fn connect(
                 *port,
                 username.clone(),
                 password.clone(),
+                *vendor,
                 size.0,
                 size.1,
                 notify,
@@ -254,6 +251,7 @@ struct SessionInner {
     host: String,
     port: u16,
     username: String,
+    vendor: Vendor,
     out: Mutex<String>,
     status: Mutex<String>,
     tx: Mutex<Option<Sender<Vec<u8>>>>,
@@ -273,6 +271,7 @@ impl RemoteSession {
         port: u16,
         username: String,
         password: String,
+        vendor: Vendor,
         cols: u16,
         rows: u16,
         notify: Notify,
@@ -282,6 +281,7 @@ impl RemoteSession {
             host: host.clone(),
             port,
             username: username.clone(),
+            vendor,
             out: Mutex::new(String::new()),
             status: Mutex::new("connecting...".to_string()),
             tx: Mutex::new(None),
@@ -330,11 +330,12 @@ impl RemoteSession {
             format!("{}@", self.inner.username)
         };
         format!(
-            "{} {}{}:{}",
+            "{} {}{}:{} [{}]",
             self.inner.protocol.label(),
             user,
             self.inner.host,
-            self.inner.port
+            self.inner.port,
+            self.inner.vendor.label().to_lowercase()
         )
     }
 
@@ -1196,6 +1197,7 @@ mod tests {
             port,
             String::new(),
             String::new(),
+            Vendor::Cisco,
             80,
             24,
             Arc::new(|| {}),
@@ -1246,6 +1248,7 @@ mod tests {
             port,
             "admin".into(),
             "secret".into(),
+            Vendor::Cisco,
             80,
             24,
             Arc::new(|| {}),
@@ -1367,6 +1370,7 @@ mod tests {
             port,
             "admin".into(),
             "secret".into(),
+            Vendor::Cisco,
             80,
             24,
             Arc::new(|| {}),
@@ -1407,6 +1411,7 @@ mod tests {
             port,
             "admin".into(),
             "wrong".into(),
+            Vendor::Cisco,
             80,
             24,
             Arc::new(|| {}),

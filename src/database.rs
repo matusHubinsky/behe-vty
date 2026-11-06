@@ -122,6 +122,7 @@ impl Database {
         Ok(())
     }
 
+    #[allow(dead_code)] // used by tests; part of the device CRUD API
     pub fn get_device(&self, name: &str) -> Result<Option<Device>> {
         let mut stmt = self
             .conn
@@ -160,6 +161,7 @@ impl Database {
         rows.collect()
     }
 
+    #[allow(dead_code)] // used by tests; part of the device CRUD API
     pub fn delete_device(&self, name: &str) -> Result<bool> {
         let n = self
             .conn

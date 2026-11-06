@@ -1,6 +1,6 @@
 [package]
 name = "behe-vty"
-version = "0.1.1"
+version = "1.0.0"
 authors = ["Matus Hubinsky"]
 edition = '2024'
 description = "Terminal wrapper that provides the autocomplete into the Cisco terminal."
@@ -21,3 +21,4 @@ dirs = "7"
 serialport = { version = "4.10.1", default-features = false } 
 tokio = { version = "1", features = ["full"] }
 russh = "0.65"
+rand = "0.10.3"
