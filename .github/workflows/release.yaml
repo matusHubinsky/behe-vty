@@ -7,6 +7,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+permissions:
+  contents: write # attach binaries to the GitHub Release
+
 jobs:
   release:
     strategy:
@@ -25,14 +28,14 @@ jobs:
             artifact: behe-vty-windows-x86_64.tar.gz
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
 
       - name: Install linker toolchain (musl)
-        if: matrix.packages != ''
+        if: matrix.packages
         run: sudo apt-get update && sudo apt-get install -y ${{ matrix.packages }}
 
       - name: Build release
@@ -50,7 +53,7 @@ jobs:
             tar -czf "dist/${{ matrix.artifact }}" -C dist behe-vty
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.artifact }}
