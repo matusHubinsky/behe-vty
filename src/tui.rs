@@ -793,8 +793,13 @@ fn connection_dialog(
                             Err(e) => append_output(s, &out2, &format!("% {host}:{port} failed: {e}\n")),
                         }
                     }
-                    networking::Endpoint::Serial { path, baud } => match endpoint.check() {
-                        Ok(()) => append_output(s, &out2, &format!("% console {path} @ {baud} baud opened (session plumbing TODO)\n")),
+                    networking::Endpoint::Serial { path, baud } => match networking::connect(&endpoint, None, (0, 0)) {
+                        Ok(networking::Transport::Serial(port)) => append_output(
+                            s,
+                            &out2,
+                            &format!("% console {} @ {baud} baud opened (serial session plumbing TODO)\n", port.name().unwrap_or_else(|| path.clone())),
+                        ),
+                        Ok(_) => append_output(s, &out2, &format!("% console {path} opened\n")),
                         Err(e) => append_output(s, &out2, &format!("% cannot open console {path}: {e}\n")),
                     },
                 }
