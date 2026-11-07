@@ -78,17 +78,34 @@ impl CommandTree {
         }
     }
 
-    /// All commands available in `mode` that start with `prefix`.
-    pub fn autocomplete(&self, mode: &CiscoTerminalMode, prefix: &str) -> Vec<String> {
+    /// All commands available in `mode` that match `input`.
+    ///
+    /// Matching is token-based, like IOS abbreviations: every whitespace
+    /// token of `input` must be a prefix of the corresponding token of the
+    /// command, so `conf t` matches `configure terminal` and `in` matches
+    /// `interface Gi0/0/`.
+    pub fn autocomplete(&self, mode: &CiscoTerminalMode, input: &str) -> Vec<String> {
         match self.modes.get(Self::key(mode)) {
             Some(commands) => commands
                 .iter()
-                .filter(|c| c.starts_with(prefix))
+                .filter(|c| command_matches(input, c))
                 .cloned()
                 .collect(),
             None => Vec::new(),
         }
     }
+}
+
+/// True when `input` is an IOS-style abbreviation of `command`: every input
+/// token is a prefix of the corresponding command token.
+pub fn command_matches(input: &str, command: &str) -> bool {
+    let input_tokens: Vec<&str> = input.split_whitespace().collect();
+    let command_tokens: Vec<&str> = command.split_whitespace().collect();
+    input_tokens.len() <= command_tokens.len()
+        && input_tokens
+            .iter()
+            .zip(command_tokens.iter())
+            .all(|(i, c)| c.starts_with(i))
 }
 
 #[cfg(test)]
@@ -124,6 +141,32 @@ mod tests {
 
         assert!(tree
             .autocomplete(&CiscoTerminalMode::UserExec, "zzzz")
+            .is_empty());
+    }
+
+    #[test]
+    fn test_autocomplete_matches_token_abbreviations() {
+        let tree = CommandTree::load(Vendor::Cisco);
+
+        assert_eq!(
+            tree.autocomplete(&CiscoTerminalMode::PrivilegedExec, "conf t"),
+            vec!["configure terminal".to_string()]
+        );
+
+        assert_eq!(
+            tree.autocomplete(&CiscoTerminalMode::GlobalConfig, "in"),
+            vec!["interface Gi0/0/".to_string()]
+        );
+
+        assert_eq!(
+            tree.autocomplete(&CiscoTerminalMode::UserExec, "sh ip int b"),
+            vec!["show ip interface brief".to_string()]
+        );
+
+        // A token that is not a prefix of the corresponding command token
+        // must not match.
+        assert!(tree
+            .autocomplete(&CiscoTerminalMode::PrivilegedExec, "conf x")
             .is_empty());
     }
 

@@ -1,7 +1,8 @@
 # Cisco IOS command templates per terminal mode.
 # Keys must match CommandTree::key() in src/commands.rs.
-# Entries may include arguments ("line vty 0 4"); autocomplete completes
-# whole listed strings only (no dynamic argument completion yet).
+# Entries may include arguments ("line vty 0 4", "interface Gi0/0/"); the
+# ghost suggests the whole entry and matching is token-based, so "conf t"
+# matches "configure terminal" and "in" matches "interface Gi0/0/".
 # Mode-transition commands (enable / disable / configure … / interface … /
 # line … / exit / end) must stay here: cisco.rs::terminal() acts on them.
 
@@ -76,7 +77,7 @@ global_config:
   - username
   - crypto key generate rsa
   - ip ssh version 2
-  - interface
+  - interface Gi0/0/
   - line console 0
   - line vty 0 4
   - router ospf

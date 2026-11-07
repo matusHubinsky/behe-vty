@@ -109,6 +109,25 @@ impl Database {
         rows.collect()
     }
 
+    /// The most-used commands from the history of `device` and of every
+    /// saved device of the same `vendor`, most frequent first (ties: most
+    /// recent first). Used to rank autocomplete suggestions.
+    pub fn frequent_commands(&self, device: &str, vendor: &str, limit: usize) -> Result<Vec<(String, i64)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT command, COUNT(*) FROM history
+             WHERE device = ?1
+                OR device IN (SELECT name FROM devices WHERE vendor = ?2)
+             GROUP BY command
+             ORDER BY COUNT(*) DESC, MAX(id) DESC
+             LIMIT ?3",
+        )?;
+
+        let rows = stmt.query_map(params![device, vendor, limit as i64], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+        rows.collect()
+    }
+
     // ---------------- devices
 
     pub fn save_device(&self, d: &Device) -> Result<()> {
@@ -236,6 +255,58 @@ mod tests {
         assert!(db.delete_device("core").unwrap());
         assert!(!db.delete_device("core").unwrap()); // already gone
         assert!(db.get_device("core").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_frequent_commands_rank_by_usage() {
+        let db = test_db();
+        let dev = |name: &str, vendor: &str| Device {
+            name: name.to_string(),
+            host: "10.0.0.1".to_string(),
+            port: 22,
+            protocol: "ssh".to_string(),
+            vendor: vendor.to_string(),
+            username: String::new(),
+        };
+        db.save_device(&dev("core", "cisco")).unwrap();
+        db.save_device(&dev("edge", "cisco")).unwrap();
+        db.save_device(&dev("jbox", "juniper")).unwrap();
+
+        db.add_history("core", "show ip route").unwrap();
+        db.add_history("core", "show ip route").unwrap();
+        db.add_history("edge", "show ip interface brief").unwrap(); // same vendor
+        db.add_history("jbox", "show interface terse").unwrap(); // other vendor
+        db.add_history("local", "enable").unwrap(); // unrelated device
+
+        let freq = db.frequent_commands("core", "cisco", 10).unwrap();
+        assert_eq!(
+            freq,
+            vec![
+                ("show ip route".to_string(), 2),
+                ("show ip interface brief".to_string(), 1),
+            ]
+        );
+
+        // For the local simulator the same-vendor device history counts too.
+        let local = db.frequent_commands("local", "cisco", 10).unwrap();
+        assert_eq!(
+            local,
+            vec![
+                ("show ip route".to_string(), 2),
+                ("enable".to_string(), 1),
+                ("show ip interface brief".to_string(), 1),
+            ]
+        );
+
+        // Other vendors' history stays out.
+        let juniper = db.frequent_commands("local", "juniper", 10).unwrap();
+        assert_eq!(
+            juniper,
+            vec![
+                ("enable".to_string(), 1),
+                ("show interface terse".to_string(), 1),
+            ]
+        );
     }
 
     #[test]

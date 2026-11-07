@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::cisco;
-use crate::commands::{CommandTree, Vendor};
+use crate::commands::{command_matches, CommandTree, Vendor};
 use crate::database::{Database, Device};
 use crate::networking;
 
@@ -123,6 +123,53 @@ fn longest_common_prefix(commands: &[String]) -> String {
     prefix
 }
 
+/// The inline ghost for `input` against the suggested `command`: what still
+/// has to be typed to reach `command`. Supports IOS-style abbreviations, so
+/// `conf` against `configure terminal` yields `igure terminal` and `conf t`
+/// yields `erminal`.
+fn suggestion_tail(command: &str, input: &str) -> String {
+    if let Some(rest) = command.strip_prefix(input) {
+        return rest.to_string();
+    }
+
+    let input_tokens: Vec<&str> = input.split_whitespace().collect();
+    let Some(last) = input_tokens.last() else {
+        return String::new();
+    };
+
+    let command_tokens: Vec<&str> = command.split_whitespace().collect();
+    match command_tokens.get(input_tokens.len() - 1) {
+        Some(token) if token.starts_with(last) => {
+            let mut tail = token[last.len()..].to_string();
+            for t in &command_tokens[input_tokens.len()..] {
+                tail.push(' ');
+                tail.push_str(t);
+            }
+            tail
+        }
+        _ => String::new(),
+    }
+}
+
+/// Orders autocomplete candidates: history-proven commands first (most used
+/// first), then the YAML templates in file order. `usage` must already be
+/// sorted by frequency.
+fn rank_by_usage(yaml: Vec<String>, usage: &[(String, i64)], input: &str) -> Vec<String> {
+    let mut ranked: Vec<String> = usage
+        .iter()
+        .map(|(command, _)| command.clone())
+        .filter(|command| command_matches(input, command))
+        .collect();
+
+    for command in yaml {
+        if !ranked.contains(&command) {
+            ranked.push(command);
+        }
+    }
+
+    ranked
+}
+
 fn append_output(s: &mut Cursive, buffer: &Arc<Mutex<String>>, text: &str) {
     let snapshot = {
         let mut out = buffer.lock().unwrap();
@@ -143,6 +190,7 @@ struct InputView {
     content: String,
     cursor: usize, // byte index, always on a char boundary
     ghost: String,
+    ghost_command: String, // full command the ghost is a tail of
     multiline: bool, // Ctrl+V / pasted newline: Enter inserts a line, Ctrl+Z sends the block
     terminal: Arc<Mutex<cisco::Terminal>>,
     history: Arc<Mutex<History>>,
@@ -150,6 +198,8 @@ struct InputView {
     scheme: Arc<AtomicUsize>,
     commands: Arc<RwLock<CommandTree>>,
     database: Arc<Mutex<Database>>,
+    device: Arc<Mutex<String>>,
+    vendor: Arc<Mutex<Vendor>>,
     session: Arc<Mutex<Option<networking::RemoteSession>>>,
     notify: networking::Notify,
 }
@@ -162,6 +212,8 @@ impl InputView {
         scheme: Arc<AtomicUsize>,
         commands: Arc<RwLock<CommandTree>>,
         database: Arc<Mutex<Database>>,
+        device: Arc<Mutex<String>>,
+        vendor: Arc<Mutex<Vendor>>,
         session: Arc<Mutex<Option<networking::RemoteSession>>>,
         notify: networking::Notify,
     ) -> Self {
@@ -169,6 +221,7 @@ impl InputView {
             content: String::new(),
             cursor: 0,
             ghost: String::new(),
+            ghost_command: String::new(),
             multiline: false,
             terminal,
             history,
@@ -176,6 +229,8 @@ impl InputView {
             scheme,
             commands,
             database,
+            device,
+            vendor,
             session,
             notify,
         }
@@ -188,35 +243,41 @@ impl InputView {
     }
 
     fn matches(&self) -> Vec<String> {
-        let term = self.terminal.lock().unwrap();
-        self.commands
-            .read()
+        let (device, vendor) = {
+            let device = self.device.lock().unwrap().clone();
+            let vendor = *self.vendor.lock().unwrap();
+            (device, vendor)
+        };
+        let usage = self
+            .database
+            .lock()
             .unwrap()
-            .autocomplete(&term.mode, &self.content)
+            .frequent_commands(&device, &vendor.label().to_lowercase(), 500)
+            .unwrap_or_default();
+
+        let yaml = {
+            let term = self.terminal.lock().unwrap();
+            self.commands
+                .read()
+                .unwrap()
+                .autocomplete(&term.mode, &self.content)
+        };
+
+        rank_by_usage(yaml, &usage, &self.content)
     }
 
     fn update_ghost(&mut self) {
         // Only suggest on a single line, when the cursor is at the end of it.
         if self.multiline || self.content.is_empty() || self.cursor != self.content.len() {
             self.ghost.clear();
+            self.ghost_command.clear();
             return;
         }
 
         let matches = self.matches();
 
-        self.ghost = if matches.len() == 1 {
-            matches[0]
-                .strip_prefix(self.content.as_str())
-                .unwrap_or("")
-                .to_string()
-        } else {
-            // Several candidates: show the shared remainder, if any.
-            let prefix = longest_common_prefix(&matches);
-            prefix
-                .strip_prefix(self.content.as_str())
-                .unwrap_or("")
-                .to_string()
-        };
+        self.ghost_command = matches.first().cloned().unwrap_or_default();
+        self.ghost = suggestion_tail(&self.ghost_command, &self.content);
     }
 
     fn accept_ghost(&mut self) -> bool {
@@ -224,10 +285,9 @@ impl InputView {
             return false;
         }
 
-        let ghost = std::mem::take(&mut self.ghost);
-        self.content.push_str(&ghost);
-        self.cursor = self.content.len();
-        self.update_ghost();
+        self.ghost.clear();
+        let command = std::mem::take(&mut self.ghost_command);
+        self.set_content(command);
         true
     }
 
@@ -267,6 +327,7 @@ impl InputView {
         let input = std::mem::take(&mut self.content);
         self.cursor = 0;
         self.ghost.clear();
+        self.ghost_command.clear();
         let was_multiline = self.multiline;
         self.multiline = false;
 
@@ -277,13 +338,16 @@ impl InputView {
         let input = lines.into_iter().next().unwrap_or_default();
 
         self.history.lock().unwrap().add_line(input.clone());
-        let _ = self.database.lock().unwrap().add_history("local", &input);
+        let device = self.device.lock().unwrap().clone();
+        let _ = self.database.lock().unwrap().add_history(&device, &input);
 
         // `ssh` / `telnet` commands open (or replace) a live remote session.
         if let Some(endpoint) = networking::parse_remote_command(&input) {
             let buffer = Arc::clone(&self.output_buffer);
             let session = Arc::clone(&self.session);
             let notify = Arc::clone(&self.notify);
+            let device = Arc::clone(&self.device);
+            let vendor = Arc::clone(&self.vendor);
             return EventResult::with_cb(move |s| {
                 if let Some(old) = session.lock().unwrap().take() {
                     old.shutdown();
@@ -306,6 +370,10 @@ impl InputView {
                     Ok(networking::Transport::Remote(sess)) => {
                         let desc = sess.describe();
                         *session.lock().unwrap() = Some(sess);
+                        if let networking::Endpoint::Remote { host, vendor: v, .. } = &endpoint {
+                            *device.lock().unwrap() = host.clone();
+                            *vendor.lock().unwrap() = *v;
+                        }
                         append_output(
                             s,
                             &buffer,
@@ -414,9 +482,10 @@ impl InputView {
             }
         }
         {
+            let device = self.device.lock().unwrap().clone();
             let db = self.database.lock().unwrap();
             for l in &lines {
-                let _ = db.add_history("local", l);
+                let _ = db.add_history(&device, l);
             }
         }
 
@@ -713,6 +782,8 @@ fn connection_dialog(
     db: &Arc<Mutex<Database>>,
     output_buffer: &Arc<Mutex<String>>,
     commands: &Arc<RwLock<CommandTree>>,
+    device: &Arc<Mutex<String>>,
+    vendor: &Arc<Mutex<Vendor>>,
     session: &Arc<Mutex<Option<networking::RemoteSession>>>,
     notify: &networking::Notify,
 ) {
@@ -795,6 +866,8 @@ fn connection_dialog(
     let db2 = Arc::clone(db);
     let out2 = Arc::clone(output_buffer);
     let cmds2 = Arc::clone(commands);
+    let device2 = Arc::clone(device);
+    let vendor2 = Arc::clone(vendor);
     let session2 = Arc::clone(session);
     let notify2 = Arc::clone(notify);
 
@@ -857,6 +930,8 @@ fn connection_dialog(
                             Ok(networking::Transport::Remote(sess)) => {
                                 let desc = sess.describe();
                                 *session2.lock().unwrap() = Some(sess);
+                                *device2.lock().unwrap() = name.clone();
+                                *vendor2.lock().unwrap() = vendor;
                                 let dev = Device {
                                     name: name.clone(),
                                     host: host.clone(),
@@ -982,6 +1057,8 @@ pub fn run() {
 
     let database = Arc::new(Mutex::new(Database::open().expect("cannot open database")));
     let commands = Arc::new(RwLock::new(CommandTree::load(Vendor::Cisco)));
+    let device = Arc::new(Mutex::new("local".to_string()));
+    let vendor = Arc::new(Mutex::new(Vendor::Cisco));
 
     let past = database
         .lock()
@@ -1036,6 +1113,8 @@ pub fn run() {
         Arc::clone(&scheme_index),
         Arc::clone(&commands),
         Arc::clone(&database),
+        Arc::clone(&device),
+        Arc::clone(&vendor),
         Arc::clone(&session),
         Arc::clone(&notify),
     );
@@ -1075,6 +1154,8 @@ pub fn run() {
         &database,
         &output_buffer,
         &commands,
+        &device,
+        &vendor,
         &session,
         &notify,
     );
