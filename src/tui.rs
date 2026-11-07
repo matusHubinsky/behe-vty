@@ -20,7 +20,7 @@ use cursive::traits::*;
 use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::cisco;

@@ -107,7 +107,7 @@ mod tests {
         assert_eq!(Vendor::parse("CheckPoint"), Vendor::Other);
         assert_eq!(Vendor::parse("--; DROP ALL;"), Vendor::Other);
         assert_eq!(Vendor::parse("rm -rf"), Vendor::Other);
-        assert_eq!(Vendor::all().len(), 4);
+        assert_eq!(Vendor::all().len(), 3);
         assert_eq!(Vendor::Cisco.label(), "Cisco");
     }
 

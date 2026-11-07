@@ -35,7 +35,7 @@ pub fn switch_mode(mode: &CiscoTerminalMode) -> String {
         CiscoTerminalMode::UserExec => ">".to_string(),
         CiscoTerminalMode::PrivilegedExec => "#".to_string(),
         CiscoTerminalMode::GlobalConfig => "(config)#".to_string(),
-        CiscoTerminalMode::LineConfig => "config-line)#".to_string(),
+        CiscoTerminalMode::LineConfig => "(config-line)#".to_string(),
         CiscoTerminalMode::InterfaceConfig(_) => "(config-if)#".to_string(),
     }
 }
@@ -157,7 +157,7 @@ mod tests {
         ];
 
         for (mode, expected) in cases {
-            assert_eq!(switch_mode(&mode).trim(), expected, "mode: {:?}", mode);
+            assert_eq!(switch_mode(&mode).trim(), expected, "mode: {:?}", mode); // TODO: FIX ME!
         }
     }
 
