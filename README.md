@@ -9,7 +9,7 @@
 
 This is a Rust terminal wrapper that provides the typo-free autocomplete into the Cisco / Juniper / Mikrotik consoles. Works with Telnet, SSH or Console cable. 
 
-Cisco `%LINK-*-CHANGED` messaged are ignored and will never appear at the terminal input. 
+Cisco `%LINK-*-CHANGED` messaged are ignored and will never appear at the terminal input.
 TODO: terminal will accept list of commands and enters them into Cisco IOS in batches to be excecuted one by one, each line ends with CTLN+Z.
 
 ## About 

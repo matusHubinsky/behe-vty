@@ -20,7 +20,7 @@ use cursive::traits::*;
 use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::cisco;
@@ -29,7 +29,7 @@ use crate::database::{Database, Device};
 use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
-const CURSOR_FPS: u32 = 5;
+const CURSOR_FPS: u32 = 24;
 
 // ---------------------------------------------------------------- colour schemes
 
@@ -206,6 +206,7 @@ struct InputView {
     content: String,
     cursor: usize, // byte index, always on a char boundary
     ghost: String,
+    multiline: bool, // Ctrl+V / pasted newline: Enter inserts a line, Ctrl+Z sends the block
     terminal: Arc<Mutex<cisco::Terminal>>,
     history: Arc<Mutex<History>>,
     output_buffer: Arc<Mutex<String>>,
@@ -231,6 +232,7 @@ impl InputView {
             content: String::new(),
             cursor: 0,
             ghost: String::new(),
+            multiline: false,
             terminal,
             history,
             output_buffer,
@@ -257,8 +259,8 @@ impl InputView {
     }
 
     fn update_ghost(&mut self) {
-        // Only suggest when the cursor is at the end of the line.
-        if self.content.is_empty() || self.cursor != self.content.len() {
+        // Only suggest on a single line, when the cursor is at the end of it.
+        if self.multiline || self.content.is_empty() || self.cursor != self.content.len() {
             self.ghost.clear();
             return;
         }
@@ -328,6 +330,14 @@ impl InputView {
         let input = std::mem::take(&mut self.content);
         self.cursor = 0;
         self.ghost.clear();
+        let was_multiline = self.multiline;
+        self.multiline = false;
+
+        let lines: Vec<String> = input.split('\n').map(|l| l.to_string()).collect();
+        if lines.len() > 1 || was_multiline {
+            return self.submit_block(lines);
+        }
+        let input = lines.into_iter().next().unwrap_or_default();
 
         self.history.lock().unwrap().add_line(input.clone());
         let _ = self.database.lock().unwrap().add_history("local", &input);
@@ -364,6 +374,11 @@ impl InputView {
                             &buffer,
                             &format!("% {desc} connecting... (type 'disconnect' to close)\n"),
                         );
+                        // The input line shows a static session label; remote
+                        // output (incl. Cisco status messages) stays in the scrollback.
+                        s.call_on_name("prompt", |v: &mut TextView| {
+                            v.set_content(format!("{desc} "));
+                        });
                     }
                     Ok(_) => append_output(s, &buffer, &format!("% {label} opened\n")),
                     Err(e) => append_output(s, &buffer, &format!("% {label} failed: {e}\n")),
@@ -374,6 +389,7 @@ impl InputView {
         // `disconnect` closes the active remote session (PuTTY: close window).
         if input.trim() == "disconnect" {
             let buffer = Arc::clone(&self.output_buffer);
+            let terminal = Arc::clone(&self.terminal);
             let closed = {
                 let mut guard = self.session.lock().unwrap();
                 guard.take().map(|s| {
@@ -388,6 +404,10 @@ impl InputView {
                     "% no active remote session\n"
                 };
                 append_output(s, &buffer, msg);
+                let prompt = terminal.lock().unwrap().prompt.clone();
+                s.call_on_name("prompt", |v: &mut TextView| {
+                    v.set_content(prompt);
+                });
             });
         }
 
@@ -444,6 +464,67 @@ impl InputView {
         })
     }
 
+    /// Multi-line buffer submitted (Ctrl+Z, or Enter while in multiline mode):
+    /// paste the whole block at once. With a live remote session every line is
+    /// sent with CR and the block ends with Ctrl+Z (0x1A), so Cisco accepts a
+    /// pasted config and leaves config mode. Otherwise each line goes through
+    /// the local simulator.
+    fn submit_block(&mut self, lines: Vec<String>) -> EventResult {
+        {
+            let mut h = self.history.lock().unwrap();
+            for l in &lines {
+                h.add_line(l.clone());
+            }
+        }
+        {
+            let db = self.database.lock().unwrap();
+            for l in &lines {
+                let _ = db.add_history("local", l);
+            }
+        }
+
+        if let Some(sess) = self.session.lock().unwrap().as_ref() {
+            for l in &lines {
+                sess.send(format!("{l}\r").as_bytes());
+            }
+            sess.send(&[0x1a]);
+            return EventResult::consumed();
+        }
+
+        let mut text = String::new();
+        let mut end = false;
+        let mut new_prompt = String::new();
+        {
+            let mut term = self.terminal.lock().unwrap();
+            for l in &lines {
+                let old_prompt = term.prompt.clone();
+                term.input = l.clone();
+                cisco::terminal(&mut term);
+
+                text.push_str(&format!("{} {}\n", old_prompt, l));
+                if !term.output.is_empty() && term.output != *l {
+                    text.push_str(&format!("{}\n", term.output));
+                }
+                new_prompt = term.prompt.clone();
+                if term.end {
+                    end = true;
+                    break;
+                }
+            }
+        }
+
+        let buffer = Arc::clone(&self.output_buffer);
+        EventResult::with_cb(move |s| {
+            append_output(s, &buffer, &text);
+            s.call_on_name("prompt", |v: &mut TextView| {
+                v.set_content(new_prompt.clone());
+            });
+            if end {
+                s.quit();
+            }
+        })
+    }
+
     fn history_move(&mut self, up: bool) {
         let line = {
             let mut h = self.history.lock().unwrap();
@@ -468,55 +549,86 @@ impl View for InputView {
         let ghost = ColorStyle::new(sc.ghost, sc.input_bg);
         let cur = ColorStyle::new(sc.input_bg, sc.cursor);
 
-        // Background across the whole field.
+        // Background across the whole (possibly multi-line) field.
         printer.with_color(normal, |p| {
-            p.print_hline((0, 0), printer.size.x, " ");
+            for y in 0..printer.size.y {
+                p.print_hline((0, y), printer.size.x, " ");
+            }
         });
 
-        // Horizontal scroll so the cursor stays visible.
-        let chars: Vec<char> = self.content.chars().collect();
-        let cursor_col = self.content[..self.cursor].chars().count();
+        let lines: Vec<&str> = self.content.split('\n').collect();
+        let height = printer.size.y.max(1);
+
+        // Cursor row/column within the buffer.
+        let before = &self.content[..self.cursor];
+        let cursor_row = before.matches('\n').count();
+        let line_start = before.rfind('\n').map(|i| i + 1).unwrap_or(0);
+        let cursor_col = before[line_start..].chars().count();
+
+        // Vertical scroll so the cursor row stays visible.
+        let row_offset = cursor_row.saturating_sub(height.saturating_sub(1));
         let width = printer.size.x.saturating_sub(1).max(1);
-        let offset = cursor_col.saturating_sub(width);
 
-        let visible: String = chars.iter().skip(offset).take(width).collect();
-        printer.with_color(normal, |p| p.print((0, 0), &visible));
+        for (row, line) in lines.iter().enumerate() {
+            if row < row_offset {
+                continue;
+            }
+            let y = row - row_offset;
+            if y >= height {
+                break;
+            }
 
-        // Ghost text right after the typed text.
-        let typed_cols = chars.len().saturating_sub(offset);
+            let chars: Vec<char> = line.chars().collect();
+            // Horizontal scroll so the cursor column stays visible.
+            let col_offset = if row == cursor_row {
+                cursor_col.saturating_sub(width)
+            } else {
+                0
+            };
 
-        if !self.ghost.is_empty() && typed_cols < width {
-            let room = width - typed_cols;
-            let g: String = self.ghost.chars().take(room).collect();
-            printer.with_color(ghost, |p| p.print((typed_cols, 0), &g));
-        }
+            let visible: String = chars.iter().skip(col_offset).take(width).collect();
+            printer.with_color(normal, |p| p.print((0, y), &visible));
 
-        // Cursor.
-        if printer.focused {
-            let blink_on = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() / 530 % 2 == 0)
-                .unwrap_or(true);
+            // Ghost text right after the typed text (single-line mode only).
+            if row == cursor_row && !self.ghost.is_empty() {
+                let typed_cols = chars.len().saturating_sub(col_offset);
+                if typed_cols < width {
+                    let room = width - typed_cols;
+                    let g: String = self.ghost.chars().take(room).collect();
+                    printer.with_color(ghost, |p| p.print((typed_cols, y), &g));
+                }
+            }
 
-            if blink_on {
-                let col = cursor_col - offset;
+            // Cursor.
+            if printer.focused && row == cursor_row {
+                let blink_on = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() / 530 % 2 == 0)
+                    .unwrap_or(true);
 
-                let under: String = if cursor_col < chars.len() {
-                    chars[cursor_col].to_string()
-                } else if let Some(first) = self.ghost.chars().next() {
-                    // Cursor sits on the first ghost character.
-                    first.to_string()
-                } else {
-                    " ".to_string()
-                };
-
-                printer.with_color(cur, |p| p.print((col, 0), &under));
+                if blink_on {
+                    let col = cursor_col.saturating_sub(col_offset);
+                    let under: String = if cursor_col < chars.len() {
+                        chars[cursor_col].to_string()
+                    } else if let Some(first) = self.ghost.chars().next() {
+                        first.to_string()
+                    } else {
+                        " ".to_string()
+                    };
+                    printer.with_color(cur, |p| p.print((col, y), &under));
+                }
             }
         }
     }
 
-    fn required_size(&mut self, _constraint: Vec2) -> Vec2 {
-        Vec2::new(INPUT_WIDTH, 1)
+    fn required_size(&mut self, constraint: Vec2) -> Vec2 {
+        let lines = self.content.matches('\n').count() + 1;
+        let height = if constraint.y > 0 {
+            lines.min(constraint.y)
+        } else {
+            lines
+        };
+        Vec2::new(INPUT_WIDTH, height.max(1))
     }
 
     fn take_focus(
@@ -528,6 +640,15 @@ impl View for InputView {
 
     fn on_event(&mut self, event: Event) -> EventResult {
         match event {
+            Event::Char('\n') => {
+                // Pasted newline: switch to multi-line input.
+                self.multiline = true;
+                self.content.insert(self.cursor, '\n');
+                self.cursor += 1;
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
             Event::Char(c) => {
                 self.content.insert(self.cursor, c);
                 self.cursor += c.len_utf8();
@@ -545,6 +666,9 @@ impl View for InputView {
 
                     self.content.remove(prev);
                     self.cursor = prev;
+                }
+                if !self.content.contains('\n') {
+                    self.multiline = false;
                 }
 
                 self.update_ghost();
@@ -607,6 +731,17 @@ impl View for InputView {
 
             Event::CtrlChar('g') | Event::Key(Key::Tab) => self.complete(),
 
+            // Ctrl+V: toggle multi-line input (Enter then inserts a newline).
+            Event::CtrlChar('v') => {
+                self.multiline = !self.multiline;
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            // Ctrl+Z: send the whole buffer (a pasted multi-line block ends
+            // with 0x1A on the device, so Cisco accepts the config paste).
+            Event::CtrlChar('z') => self.submit(),
+
             Event::Key(Key::Up) => {
                 self.history_move(true);
                 EventResult::consumed()
@@ -617,7 +752,16 @@ impl View for InputView {
                 EventResult::consumed()
             }
 
-            Event::Key(Key::Enter) => self.submit(),
+            Event::Key(Key::Enter) => {
+                if self.multiline {
+                    self.content.insert(self.cursor, '\n');
+                    self.cursor += 1;
+                    self.update_ghost();
+                    EventResult::consumed()
+                } else {
+                    self.submit()
+                }
+            }
 
             _ => EventResult::Ignored,
         }
@@ -788,6 +932,9 @@ fn connection_dialog(
                                 // Switch the autocomplete tree to the selected vendor.
                                 *cmds2.write().unwrap() = CommandTree::load(vendor);
                                 append_output(s, &out2, &format!("% {desc} connected — session active (type 'disconnect' to close)\n"));
+                                s.call_on_name("prompt", |v: &mut TextView| {
+                                    v.set_content(format!("{desc} "));
+                                });
                             }
                             Ok(_) => append_output(s, &out2, &format!("% {host}:{port} opened\n")),
                             Err(e) => append_output(s, &out2, &format!("% {host}:{port} failed: {e}\n")),
@@ -821,12 +968,39 @@ fn make_notifier(
     sink: cursive::CbSink,
     output_buffer: Arc<Mutex<String>>,
     session: Arc<Mutex<Option<networking::RemoteSession>>>,
+    terminal: Arc<Mutex<cisco::Terminal>>,
 ) -> networking::Notify {
+    // Coalesce + throttle: at most one UI refresh in flight and at most ~20/s,
+    // so a chatty telnet/ssh stream cannot flood the event loop with a full
+    // scrollback re-render per chunk.
+    let pending = Arc::new(AtomicBool::new(false));
+    let last_sent = Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(1)));
     Arc::new(move || {
+        if pending.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let closed = session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|sess| sess.is_closed())
+            .unwrap_or(false);
+        {
+            let mut last = last_sent.lock().unwrap();
+            let now = std::time::Instant::now();
+            if !closed && now.duration_since(*last) < std::time::Duration::from_millis(50) {
+                pending.store(false, Ordering::SeqCst);
+                return;
+            }
+            *last = now;
+        }
         let output_buffer = Arc::clone(&output_buffer);
         let session = Arc::clone(&session);
+        let terminal = Arc::clone(&terminal);
+        let pending = Arc::clone(&pending);
         let sink = sink.clone();
         let _ = sink.send(Box::new(move |s: &mut Cursive| {
+            pending.store(false, Ordering::SeqCst);
             let mut text = String::new();
             let mut closed_status = None;
             {
@@ -839,6 +1013,8 @@ fn make_notifier(
                     }
                 }
             }
+            // All remote output goes to the scrollback only — never to the
+            // input line's prompt view (Cisco status messages would land there).
             if !text.is_empty() {
                 let snapshot = {
                     let mut out = output_buffer.lock().unwrap();
@@ -846,11 +1022,7 @@ fn make_notifier(
                     out.clone()
                 };
                 s.call_on_name("terminal_output", |v: &mut TextView| {
-                    v.set_content(snapshot.clone());
-                });
-                let current = snapshot.rsplit('\n').next().unwrap_or("").to_string();
-                s.call_on_name("prompt", |v: &mut TextView| {
-                    v.set_content(current);
+                    v.set_content(snapshot);
                 });
             }
             if let Some(status) = closed_status {
@@ -859,6 +1031,10 @@ fn make_notifier(
                     &output_buffer,
                     &format!("% session closed by remote host ({status})\n"),
                 );
+                let prompt = terminal.lock().unwrap().prompt.clone();
+                s.call_on_name("prompt", |v: &mut TextView| {
+                    v.set_content(prompt);
+                });
             }
         }));
     })
@@ -894,6 +1070,7 @@ pub fn run() {
         siv.cb_sink().clone(),
         Arc::clone(&output_buffer),
         Arc::clone(&session),
+        Arc::clone(&terminal),
     );
 
     let text_view = TextView::new("")
@@ -931,13 +1108,14 @@ pub fn run() {
     // output scrollback absorbs every row except the 1-row input line.
     // Resizing the terminal window is handled automatically by re-layout.
     let output_box = ResizedView::with_full_height(terminal_output);
-    let input_box = input_line.fixed_height(1).full_width();
+    // No fixed height: the input grows when multi-line paste (Ctrl+V) is used.
+    let input_box = input_line.full_width();
     let layout = LinearLayout::vertical().child(output_box).child(input_box);
     let root = ResizedView::with_full_screen(layout);
 
     siv.add_layer(
         Dialog::around(root)
-            .title("BEHE-VTY | TAB: complete")
+            .title("BEHE-VTY | TAB: complete | Ctrl+V: multiline | Ctrl+Z: send block")
             .padding(Margins::lrtb(1, 1, 1, 1)), // keep padding; no title bar = max rows
     );
 

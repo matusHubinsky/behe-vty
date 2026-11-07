@@ -11,10 +11,11 @@
     - [ ] mikrotik (brief)
 - [ ] UI
     - [x] multiple themes
-    - [ ] menu like "putty"
+    - [x] menu like "putty"
     - [ ] settings menu
     - [ ] warning message when connecting to un-supported device
     - [ ] prompt window when accessing saved passwords
+    - [x] suppport for multi-line commands
 - [ ] networking
     - [x] SSH
     - [x] telnet 
