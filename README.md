@@ -9,7 +9,7 @@
 
 This is a Rust terminal wrapper that provides the typo-free autocomplete into the Cisco / Juniper / Mikrotik consoles. Works with Telnet, SSH or Console cable. 
 
-Cisco `%LINK-*-CHANGED` messaged are ignored and will never appear at the terminal input.
+Cisco `%LINK-*-CHANGED` messaged are ignored and will never appear at the terminal input. 
 TODO: terminal will accept list of commands and enters them into Cisco IOS in batches to be excecuted one by one, each line ends with CTLN+Z.
 
 ## About 
@@ -26,7 +26,8 @@ Written in Rush. `%LINK-3-UPDOWN` Cisco / Juniper / Mikrotik commands are listed
 
 ### Build from source code:
 ```
-$ git clone https://github.com/matusHubinsky/behe-vty && cd behe-vty && cargo build && cargo run
+$ git clone https://github.com/matusHubinsky/behe-vty.git
+$ cd behe-vty && cargo build && cargo run
 ```
 
 ## Usage
