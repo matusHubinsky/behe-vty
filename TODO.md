@@ -15,7 +15,7 @@
     - [ ] settings menu
     - [ ] warning message when connecting to un-supported device
     - [ ] prompt window when accessing saved passwords
-    - [ ] suppport for multi-line commands
+    - [x] suppport for multi-line commands
 - [ ] networking
     - [x] SSH
     - [x] telnet 
