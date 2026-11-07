@@ -27,7 +27,7 @@ Written in Rush. `%LINK-3-UPDOWN` Cisco / Juniper / Mikrotik commands are listed
 ### Build from source code:
 ```
 $ git clone https://github.com/matusHubinsky/behe-vty.git
-$ cd behe-vty && bash install.sh
+$ cd behe-vty && bash scripts/install.sh
 ```
 
 ## Usage
