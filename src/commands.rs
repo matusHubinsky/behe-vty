@@ -22,6 +22,7 @@ pub enum Vendor {
     Cisco,
     Juniper,
     Mikrotik,
+    Other,
 }
 
 impl Vendor {
@@ -34,14 +35,16 @@ impl Vendor {
             Vendor::Cisco => "Cisco",
             Vendor::Juniper => "Juniper",
             Vendor::Mikrotik => "Mikrotik",
+            Vendor::Other => "Not supported!",
         }
     }
 
     pub fn parse(s: &str) -> Vendor {
         match s.to_ascii_lowercase().as_str() {
+            "cisco" | "ios" => Vendor::Cisco,
             "juniper" | "junos" => Vendor::Juniper,
             "mikrotik" | "routeros" => Vendor::Mikrotik,
-            _ => Vendor::Cisco,
+            _ => Vendor::Other,
         }
     }
 }
@@ -58,6 +61,7 @@ impl CommandTree {
             Vendor::Cisco => include_str!("../commands/cisco.yaml"),
             Vendor::Juniper => include_str!("../commands/juniper.yaml"),
             Vendor::Mikrotik => include_str!("../commands/mikrotik.yaml"),
+            Vendor::Other => todo!(),
         };
         let modes: BTreeMap<String, Vec<String>> =
             serde_yml::from_str(text).expect("invalid commands yaml");
@@ -96,6 +100,13 @@ mod tests {
         assert_eq!(Vendor::parse("junos"), Vendor::Juniper);
         assert_eq!(Vendor::parse("RouterOS"), Vendor::Mikrotik);
         assert_eq!(Vendor::parse("cisco"), Vendor::Cisco);
+        assert_eq!(Vendor::parse("ios"), Vendor::Cisco);
+        assert_eq!(Vendor::parse("FortiNet"), Vendor::Other);
+        assert_eq!(Vendor::parse("Aruba"), Vendor::Other);
+        assert_eq!(Vendor::parse("HP"), Vendor::Other);
+        assert_eq!(Vendor::parse("CheckPoint"), Vendor::Other);
+        assert_eq!(Vendor::parse("--; DROP ALL;"), Vendor::Other);
+        assert_eq!(Vendor::parse("rm -rf"), Vendor::Other);
         assert_eq!(Vendor::all().len(), 3);
         assert_eq!(Vendor::Cisco.label(), "Cisco");
     }
