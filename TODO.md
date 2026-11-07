@@ -1,15 +1,21 @@
+## TODO
 
-- [ ] network
-    - [ ] SSH
-    - [ ] telnet 
-    - [ ] terminal
-- [ ] database
-    - [ ] saving user sessions
-    - [ ] encrpyting passwords
-- [ ] commands 
-    - [ ] cisco 
-    - [ ] juniper 
-    - [ ] mikrotik
+- [ ] SQLite database
+    - [x] saving user sessions per device
+    - [ ] comparing sessions per vendor 
+    - [ ] encrpyting passwords with master password
+    - [ ] storing login credentials per device
+- [ ] YAML commands list
+    - [ ] cisco (almost all) 
+    - [ ] juniper (brief)
+    - [ ] mikrotik (brief)
 - [ ] UI
-    - [ ] themes 
-    - [ ] settings
+    - [x] multiple themes
+    - [ ] menu like "putty"
+    - [ ] settings menu
+    - [ ] warning message when connecting to un-supported device
+    - [ ] prompt window when accessing saved passwords
+- [ ] networking
+    - [x] SSH
+    - [x] telnet 
+    - [ ] serial => not tested yet

@@ -882,7 +882,7 @@ pub fn run() {
 
     let terminal = Arc::new(Mutex::new(cisco::Terminal {
         mode: cisco::CiscoTerminalMode::UserExec,
-        prompt: "router>".to_string(),
+        prompt: ">".to_string(),
         input: String::new(),
         output: String::new(),
         end: false,
