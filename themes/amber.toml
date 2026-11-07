@@ -1,0 +1,15 @@
+shadow = false
+borders = "simple"
+
+[colors]
+background         = "#1A1000"
+view               = "#1A1000"
+shadow             = "#1A1000"
+primary            = "#FFB000"
+secondary          = "#FFB000"
+tertiary           = "#8A6010"
+title_primary      = "#FF8C00"
+title_secondary    = "#FF8C00"
+highlight          = "#FF8C00"
+highlight_inactive = "#8A6010"
+highlight_text     = "#1A1000"

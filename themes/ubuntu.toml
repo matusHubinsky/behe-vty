@@ -1,0 +1,15 @@
+shadow = false
+borders = "simple"
+
+[colors]
+background         = "#300A24"
+view               = "#300A24"
+shadow             = "#300A24"
+primary            = "#FFFFFF"
+secondary          = "#FFFFFF"
+tertiary           = "#8A6A7A"   # ghost / autocomplete
+title_primary      = "#E95420"
+title_secondary    = "#E95420"
+highlight          = "#E95420"
+highlight_inactive = "#8A6A7A"
+highlight_text     = "#300A24"

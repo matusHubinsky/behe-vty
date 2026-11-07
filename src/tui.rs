@@ -13,9 +13,7 @@
 // limitations under the Licence.
 
 use cursive::event::{Event, EventResult, Key};
-use cursive::theme::{
-    BorderStyle, Color, ColorStyle, Palette, PaletteColor, Theme as CursiveTheme,
-};
+use cursive::theme::{Color, ColorStyle, PaletteColor};
 use cursive::traits::*;
 use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
@@ -29,12 +27,12 @@ use crate::database::{Database, Device};
 use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
-const CURSOR_FPS: u32 = 24;
+const CURSOR_FPS: u32 = 12;
 
-// ---------------------------------------------------------------- colour schemes
+// ---------------------------------------------------------------- colour THEMES
 
 #[derive(Clone, Copy)]
-struct Scheme {
+struct Theme {
     name: &'static str,
     bg: Color,
     fg: Color,
@@ -44,89 +42,28 @@ struct Scheme {
     cursor: Color,
 }
 
-const SCHEMES: [Scheme; 5] = [
-    Scheme {
-        name: "Ubuntu",
-        bg: Color::Rgb(0x30, 0x0a, 0x24),     // #300A24 aubergine background
-        fg: Color::Rgb(0xff, 0xff, 0xff),     // white text
-        prompt: Color::Rgb(0xe9, 0x54, 0x20), // #E95420 ubuntu orange (prompt/titles)
-        ghost: Color::Rgb(0x8a, 0x6a, 0x7a),  // muted mauve (autocomplete ghost)
-        input_bg: Color::Rgb(0x30, 0x0a, 0x24),
-        cursor: Color::Rgb(0xff, 0xff, 0xff), // white blinking block
-    },
-    Scheme {
-        name: "Dark Purple",
-        bg: Color::Rgb(0x2a, 0x2a, 0x2a),
-        fg: Color::Rgb(0xee, 0xee, 0xee),
-        prompt: Color::Rgb(0x8a, 0x2b, 0xe2),
-        ghost: Color::Rgb(0x75, 0x75, 0x75),
-        input_bg: Color::Rgb(0x2a, 0x2a, 0x2a),
-        cursor: Color::Rgb(0xd0, 0xd0, 0xd0),
-    },
-    Scheme {
-        name: "Classic Green",
-        bg: Color::Rgb(0x00, 0x00, 0x00),
-        fg: Color::Rgb(0x33, 0xff, 0x33),
-        prompt: Color::Rgb(0x00, 0xcc, 0x00),
-        ghost: Color::Rgb(0x1f, 0x7a, 0x1f),
-        input_bg: Color::Rgb(0x00, 0x00, 0x00),
-        cursor: Color::Rgb(0x33, 0xff, 0x33),
-    },
-    Scheme {
-        name: "Amber",
-        bg: Color::Rgb(0x1a, 0x10, 0x00),
-        fg: Color::Rgb(0xff, 0xb0, 0x00),
-        prompt: Color::Rgb(0xff, 0x8c, 0x00),
-        ghost: Color::Rgb(0x8a, 0x60, 0x10),
-        input_bg: Color::Rgb(0x1a, 0x10, 0x00),
-        cursor: Color::Rgb(0xff, 0xb0, 0x00),
-    },
-    Scheme {
-        name: "Light",
-        bg: Color::Rgb(0xfa, 0xfa, 0xfa),
-        fg: Color::Rgb(0x22, 0x22, 0x22),
-        prompt: Color::Rgb(0x5b, 0x21, 0xb6),
-        ghost: Color::Rgb(0x9a, 0x9a, 0x9a),
-        input_bg: Color::Rgb(0xe8, 0xe8, 0xe8),
-        cursor: Color::Rgb(0x22, 0x22, 0x22),
-    },
+const THEMES: [(&str, &str); 5] = [
+    ("Ubuntu",        include_str!("../themes/ubuntu.toml")),
+    ("Dark Purple",   include_str!("../themes/dark_purple.toml")),
+    ("Classic Green", include_str!("../themes/classic_green.toml")),
+    ("Amber",         include_str!("../themes/amber.toml")),
+    ("Light",         include_str!("../themes/light.toml")),
 ];
 
-fn cursive_theme(scheme: &Scheme) -> CursiveTheme {
-    let mut palette = Palette::default();
-    palette[PaletteColor::Background] = scheme.bg;
-    palette[PaletteColor::View] = scheme.bg;
-    palette[PaletteColor::Primary] = scheme.fg;
-    palette[PaletteColor::Secondary] = scheme.fg;
-    palette[PaletteColor::Tertiary] = scheme.fg;
-    palette[PaletteColor::TitlePrimary] = scheme.prompt;
-    palette[PaletteColor::TitleSecondary] = scheme.prompt;
-    palette[PaletteColor::Highlight] = scheme.prompt;
-    palette[PaletteColor::HighlightInactive] = scheme.ghost;
-    palette[PaletteColor::HighlightText] = scheme.bg;
-    palette[PaletteColor::Shadow] = scheme.bg;
-
-    CursiveTheme {
-        shadow: false,
-        borders: BorderStyle::Simple, // outline always on
-        palette,
-    }
-}
-
-/// Apply a scheme to the whole UI.
 fn apply_scheme(s: &mut Cursive, index: usize) {
-    let scheme = SCHEMES[index];
-
-    s.set_theme(cursive_theme(&scheme));
+    let (name, toml) = THEMES[index % THEMES.len()];
+    if let Err(e) = s.load_toml(toml) {
+        eprintln!("Theme '{name}' failed to load: {e:?}");
+        return;
+    }
 
     s.call_on_name("terminal_output", |v: &mut TextView| {
-        v.set_style(ColorStyle::new(scheme.fg, scheme.bg));
+        v.set_style(ColorStyle::primary());
     });
     s.call_on_name("prompt", |v: &mut TextView| {
-        v.set_style(ColorStyle::new(scheme.prompt, scheme.bg));
+        v.set_style(ColorStyle::title_primary());
     });
 }
-
 // ---------------------------------------------------------------- history
 
 struct History {
@@ -544,10 +481,10 @@ impl InputView {
 
 impl View for InputView {
     fn draw(&self, printer: &Printer) {
-        let sc = SCHEMES[self.scheme.load(Ordering::Relaxed)];
-        let normal = ColorStyle::new(sc.fg, sc.input_bg);
-        let ghost = ColorStyle::new(sc.ghost, sc.input_bg);
-        let cur = ColorStyle::new(sc.input_bg, sc.cursor);
+        let _siv = cursive::default();
+        let normal = ColorStyle::primary();
+        let ghost  = ColorStyle::tertiary();
+        let cur    = ColorStyle::new(PaletteColor::View, PaletteColor::Primary);
 
         // Background across the whole (possibly multi-line) field.
         printer.with_color(normal, |p| {
@@ -1054,7 +991,19 @@ pub fn run() {
     let history = Arc::new(Mutex::new(History::from_lines(past)));
 
     let scheme_index = Arc::new(AtomicUsize::new(0));
-    let initial = SCHEMES[0];
+    {
+        let scheme_index = Arc::clone(&scheme_index);
+        siv.add_global_callback(Key::F2, move |s| {      // `s` is the &mut Cursive passed in
+            let next = (scheme_index.load(Ordering::Relaxed) + 1) % THEMES.len();
+            scheme_index.store(next, Ordering::Relaxed);
+
+            apply_scheme(s, next);                       // not &mut siv
+
+            s.call_on_name("terminal_output", |v: &mut TextView| {
+                v.append(format!("% Theme: {}\n", THEMES[next].0));
+            });
+        });
+    }
 
     let terminal = Arc::new(Mutex::new(cisco::Terminal {
         mode: cisco::CiscoTerminalMode::UserExec,
@@ -1074,7 +1023,7 @@ pub fn run() {
     );
 
     let text_view = TextView::new("")
-        .style(ColorStyle::new(initial.fg, initial.bg))
+        .style(ColorStyle::primary())
         .with_name("terminal_output");
 
     let terminal_output =
@@ -1094,7 +1043,7 @@ pub fn run() {
     let initial_prompt = terminal.lock().unwrap().prompt.clone();
 
     let prompt_view = TextView::new(initial_prompt)
-        .style(ColorStyle::new(initial.prompt, initial.bg))
+        .style(ColorStyle::title_primary())
         .with_name("prompt");
 
     let padded_prompt_view = PaddedView::new(Margins::lrtb(0, 1, 0, 0), prompt_view);
@@ -1130,22 +1079,19 @@ pub fn run() {
         &notify,
     );
 
-    // Ctrl+T: cycle through the colour schemes.
+    // Ctrl+T: cycle through the colour THEMES.
     {
         let scheme_index = Arc::clone(&scheme_index);
-        let output_buffer = Arc::clone(&output_buffer);
 
         siv.add_global_callback(Event::CtrlChar('t'), move |s| {
-            let next = (scheme_index.load(Ordering::Relaxed) + 1) % SCHEMES.len();
+            let next = (scheme_index.load(Ordering::Relaxed) + 1) % THEMES.len();
             scheme_index.store(next, Ordering::Relaxed);
 
             apply_scheme(s, next);
 
-            append_output(
-                s,
-                &output_buffer,
-                &format!("% Theme: {}\n", SCHEMES[next].name),
-            );
+            s.call_on_name("terminal_output", |v: &mut TextView| {
+                v.append(format!("% Theme: {}\n", THEMES[next].0));
+            });
         });
     }
 
