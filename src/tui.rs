@@ -29,7 +29,7 @@ use crate::database::{Database, Device};
 use crate::networking;
 
 const INPUT_WIDTH: usize = 72;
-const CURSOR_FPS: u32 = 5;
+const CURSOR_FPS: u32 = 24;
 
 // ---------------------------------------------------------------- colour schemes
 
