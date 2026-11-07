@@ -27,7 +27,7 @@ Written in Rush. `%LINK-3-UPDOWN` Cisco / Juniper / Mikrotik commands are listed
 ### Build from source code:
 ```
 $ git clone https://github.com/matusHubinsky/behe-vty.git
-$ cd behe-vty && cargo build && cargo run
+$ cd behe-vty && bash install.sh
 ```
 
 ## Usage
@@ -38,13 +38,13 @@ $ behe-console
 ```
 
 ## License 
-- LICENSE.md
+- [LICENSE.md](https://github.com/matusHubinsky/behe-vty?tab=EUPL-1.2-1-ov-file)
 
 ## Changelog 
 - CHANGELOG.md
 
 ## Security
-- SECURITY.md
+- [SECURITY.md](https://github.com/matusHubinsky/behe-vty?tab=security-ov-file)
 
 ## Support me
 - buy me a coffee!
