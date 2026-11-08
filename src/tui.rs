@@ -763,7 +763,8 @@ impl View for InputView {
                 EventResult::consumed()
             }
 
-            Event::Key(Key::Right) => {
+            // UPDATED: TAB and right key works same for autocomplete
+            Event::Key(Key::Right) | Event::Key(Key::Tab) => {
                 if self.cursor == self.content.len() {
                     // At end of line: accept the grey suggestion.
                     self.accept_ghost();
@@ -799,18 +800,12 @@ impl View for InputView {
                 EventResult::consumed()
             }
 
-            Event::CtrlChar('g') | Event::Key(Key::Tab) => self.complete(),
-
             // Ctrl+V: toggle multi-line input (Enter then inserts a newline).
             Event::CtrlChar('v') => {
                 self.multiline = !self.multiline;
                 self.update_ghost();
                 EventResult::consumed()
             }
-
-            // Ctrl+Z: send the whole buffer (a pasted multi-line block ends
-            // with 0x1A on the device, so Cisco accepts the config paste).
-            Event::CtrlChar('z') => self.submit(),
 
             Event::Key(Key::Up) => {
                 self.history_move(true);
