@@ -16,6 +16,7 @@ mod cisco;
 mod commands;
 mod database;
 mod tui;
+mod vault;
 mod networking;
 
 fn main() {

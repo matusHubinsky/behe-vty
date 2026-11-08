@@ -22,3 +22,5 @@ serialport = { version = "4.10.1", default-features = false }
 tokio = { version = "1", features = ["full"] }
 russh = "0.65"
 rand = "0.10.3"
+argon2 = "0.6"
+aes-gcm = "0.11"

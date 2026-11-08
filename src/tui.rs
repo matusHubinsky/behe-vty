@@ -13,7 +13,9 @@
 // limitations under the Licence.
 
 use cursive::event::{Event, EventResult, Key};
-use cursive::theme::{Color, ColorStyle, PaletteColor};
+use cursive::theme::{
+    BorderStyle, Color, ColorStyle, Palette, PaletteColor, Theme as CursiveTheme,
+};
 use cursive::traits::*;
 use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
@@ -25,14 +27,15 @@ use crate::cisco;
 use crate::commands::{command_matches, CommandTree, Vendor};
 use crate::database::{Database, Device};
 use crate::networking;
+use crate::vault;
 
 const INPUT_WIDTH: usize = 72;
-const CURSOR_FPS: u32 = 12;
+const CURSOR_FPS: u32 = 24;
 
-// ---------------------------------------------------------------- colour THEMES
+// ---------------------------------------------------------------- colour schemes
 
 #[derive(Clone, Copy)]
-struct Theme {
+struct Scheme {
     name: &'static str,
     bg: Color,
     fg: Color,
@@ -42,28 +45,89 @@ struct Theme {
     cursor: Color,
 }
 
-const THEMES: [(&str, &str); 5] = [
-    ("Ubuntu",        include_str!("../themes/ubuntu.toml")),
-    ("Dark Purple",   include_str!("../themes/dark_purple.toml")),
-    ("Classic Green", include_str!("../themes/classic_green.toml")),
-    ("Amber",         include_str!("../themes/amber.toml")),
-    ("Light",         include_str!("../themes/light.toml")),
+const SCHEMES: [Scheme; 5] = [
+    Scheme {
+        name: "Ubuntu",
+        bg: Color::Rgb(0x30, 0x0a, 0x24),     // #300A24 aubergine background
+        fg: Color::Rgb(0xff, 0xff, 0xff),     // white text
+        prompt: Color::Rgb(0xe9, 0x54, 0x20), // #E95420 ubuntu orange (prompt/titles)
+        ghost: Color::Rgb(0x8a, 0x6a, 0x7a),  // muted mauve (autocomplete ghost)
+        input_bg: Color::Rgb(0x30, 0x0a, 0x24),
+        cursor: Color::Rgb(0xff, 0xff, 0xff), // white blinking block
+    },
+    Scheme {
+        name: "Dark Purple",
+        bg: Color::Rgb(0x2a, 0x2a, 0x2a),
+        fg: Color::Rgb(0xee, 0xee, 0xee),
+        prompt: Color::Rgb(0x8a, 0x2b, 0xe2),
+        ghost: Color::Rgb(0x75, 0x75, 0x75),
+        input_bg: Color::Rgb(0x2a, 0x2a, 0x2a),
+        cursor: Color::Rgb(0xd0, 0xd0, 0xd0),
+    },
+    Scheme {
+        name: "Classic Green",
+        bg: Color::Rgb(0x00, 0x00, 0x00),
+        fg: Color::Rgb(0x33, 0xff, 0x33),
+        prompt: Color::Rgb(0x00, 0xcc, 0x00),
+        ghost: Color::Rgb(0x1f, 0x7a, 0x1f),
+        input_bg: Color::Rgb(0x00, 0x00, 0x00),
+        cursor: Color::Rgb(0x33, 0xff, 0x33),
+    },
+    Scheme {
+        name: "Amber",
+        bg: Color::Rgb(0x1a, 0x10, 0x00),
+        fg: Color::Rgb(0xff, 0xb0, 0x00),
+        prompt: Color::Rgb(0xff, 0x8c, 0x00),
+        ghost: Color::Rgb(0x8a, 0x60, 0x10),
+        input_bg: Color::Rgb(0x1a, 0x10, 0x00),
+        cursor: Color::Rgb(0xff, 0xb0, 0x00),
+    },
+    Scheme {
+        name: "Light",
+        bg: Color::Rgb(0xfa, 0xfa, 0xfa),
+        fg: Color::Rgb(0x22, 0x22, 0x22),
+        prompt: Color::Rgb(0x5b, 0x21, 0xb6),
+        ghost: Color::Rgb(0x9a, 0x9a, 0x9a),
+        input_bg: Color::Rgb(0xe8, 0xe8, 0xe8),
+        cursor: Color::Rgb(0x22, 0x22, 0x22),
+    },
 ];
 
-fn apply_scheme(s: &mut Cursive, index: usize) {
-    let (name, toml) = THEMES[index % THEMES.len()];
-    if let Err(e) = s.load_toml(toml) {
-        eprintln!("Theme '{name}' failed to load: {e:?}");
-        return;
+fn cursive_theme(scheme: &Scheme) -> CursiveTheme {
+    let mut palette = Palette::default();
+    palette[PaletteColor::Background] = scheme.bg;
+    palette[PaletteColor::View] = scheme.bg;
+    palette[PaletteColor::Primary] = scheme.fg;
+    palette[PaletteColor::Secondary] = scheme.fg;
+    palette[PaletteColor::Tertiary] = scheme.fg;
+    palette[PaletteColor::TitlePrimary] = scheme.prompt;
+    palette[PaletteColor::TitleSecondary] = scheme.prompt;
+    palette[PaletteColor::Highlight] = scheme.prompt;
+    palette[PaletteColor::HighlightInactive] = scheme.ghost;
+    palette[PaletteColor::HighlightText] = scheme.bg;
+    palette[PaletteColor::Shadow] = scheme.bg;
+
+    CursiveTheme {
+        shadow: false,
+        borders: BorderStyle::Simple, // outline always on
+        palette,
     }
+}
+
+/// Apply a scheme to the whole UI.
+fn apply_scheme(s: &mut Cursive, index: usize) {
+    let scheme = SCHEMES[index];
+
+    s.set_theme(cursive_theme(&scheme));
 
     s.call_on_name("terminal_output", |v: &mut TextView| {
-        v.set_style(ColorStyle::primary());
+        v.set_style(ColorStyle::new(scheme.fg, scheme.bg));
     });
     s.call_on_name("prompt", |v: &mut TextView| {
-        v.set_style(ColorStyle::title_primary());
+        v.set_style(ColorStyle::new(scheme.prompt, scheme.bg));
     });
 }
+
 // ---------------------------------------------------------------- history
 
 struct History {
@@ -550,10 +614,10 @@ impl InputView {
 
 impl View for InputView {
     fn draw(&self, printer: &Printer) {
-        let _siv = cursive::default();
-        let normal = ColorStyle::primary();
-        let ghost  = ColorStyle::tertiary();
-        let cur    = ColorStyle::new(PaletteColor::View, PaletteColor::Primary);
+        let sc = SCHEMES[self.scheme.load(Ordering::Relaxed)];
+        let normal = ColorStyle::new(sc.fg, sc.input_bg);
+        let ghost = ColorStyle::new(sc.ghost, sc.input_bg);
+        let cur = ColorStyle::new(sc.input_bg, sc.cursor);
 
         // Background across the whole (possibly multi-line) field.
         printer.with_color(normal, |p| {
@@ -777,6 +841,101 @@ impl View for InputView {
 // ---------------------------------------------------------------- connection dialog
 
 /// PuTTY-style startup dialog: pick a saved session or fill in a new one.
+/// Shown at startup when encrypted logins exist but no master password is
+/// known yet: unlock them, or continue without saved passwords. The
+/// connection dialog is already underneath, so dismissing just pops this
+/// layer.
+fn unlock_dialog(s: &mut Cursive, db: &Arc<Mutex<Database>>, master: &Arc<Mutex<Option<String>>>) {
+    let db2 = Arc::clone(db);
+    let master2 = Arc::clone(master);
+
+    s.add_layer(
+        Dialog::new()
+            .title("Master password")
+            .content(
+                LinearLayout::vertical()
+                    .child(TextView::new(
+                        "Saved logins are encrypted.\nEnter the master password to unlock them.",
+                    ))
+                    .child(EditView::new().secret().fixed_width(24).with_name("master_pass"))
+                    .child(TextView::new("").with_name("master_error")),
+            )
+            .button("Unlock", move |s| {
+                let pass = s
+                    .call_on_name("master_pass", |v: &mut EditView| v.get_content().to_string())
+                    .unwrap_or_default();
+
+                if pass.is_empty() {
+                    return;
+                }
+
+                match db2.lock().unwrap().verify_master(&pass) {
+                    Ok(true) => {
+                        *master2.lock().unwrap() = Some(pass);
+                        s.pop_layer();
+                    }
+                    Ok(false) => {
+                        s.call_on_name("master_error", |v: &mut TextView| {
+                            v.set_content("Wrong master password.")
+                        });
+                    }
+                    Err(_) => {
+                        s.call_on_name("master_error", |v: &mut TextView| {
+                            v.set_content("Cannot read saved logins.")
+                        });
+                    }
+                }
+            })
+            .button("Skip", |s| {
+                s.pop_layer();
+            }),
+    );
+}
+
+/// Shown after a successful connect when a password was typed but no master
+/// password is known: offer to set one and store the login encrypted.
+fn set_master_dialog(
+    s: &mut Cursive,
+    master: Arc<Mutex<Option<String>>>,
+    db: Arc<Mutex<Database>>,
+    device: String,
+    username: String,
+    password: String,
+) {
+    let master2 = Arc::clone(&master);
+    let db2 = Arc::clone(&db);
+
+    s.add_layer(
+        Dialog::new()
+            .title("Set master password")
+            .content(
+                LinearLayout::vertical()
+                    .child(TextView::new(
+                        "Choose a master password to save this login encrypted.\nLeave it empty to not save the login.",
+                    ))
+                    .child(EditView::new().secret().fixed_width(24).with_name("new_master")),
+            )
+            .button("Save", move |s| {
+                let pass = s
+                    .call_on_name("new_master", |v: &mut EditView| v.get_content().to_string())
+                    .unwrap_or_default();
+                s.pop_layer();
+
+                if pass.is_empty() {
+                    return;
+                }
+
+                *master2.lock().unwrap() = Some(pass.clone());
+                if let Ok(id) = db2.lock().unwrap().save_credential(&pass, &username, &password) {
+                    let _ = db2.lock().unwrap().link_credential(&device, id);
+                }
+            })
+            .button("Skip", |s| {
+                s.pop_layer();
+            }),
+    );
+}
+
 fn connection_dialog(
     s: &mut Cursive,
     db: &Arc<Mutex<Database>>,
@@ -784,6 +943,7 @@ fn connection_dialog(
     commands: &Arc<RwLock<CommandTree>>,
     device: &Arc<Mutex<String>>,
     vendor: &Arc<Mutex<Vendor>>,
+    master: &Arc<Mutex<Option<String>>>,
     session: &Arc<Mutex<Option<networking::RemoteSession>>>,
     notify: &networking::Notify,
 ) {
@@ -795,10 +955,19 @@ fn connection_dialog(
     }
     // Picking a saved session loads it into the form (like PuTTY); the form
     // fields are then the single source of truth for the "Open" button.
-    sessions.set_on_select(|s, d: &Device| {
+    let db_sel = Arc::clone(db);
+    let master_sel = Arc::clone(master);
+    sessions.set_on_select(move |s, d: &Device| {
         let _ = s.call_on_name("host", |v: &mut EditView| v.set_content(d.host.clone()));
         let _ = s.call_on_name("port", |v: &mut EditView| v.set_content(d.port.to_string()));
         let _ = s.call_on_name("user", |v: &mut EditView| v.set_content(d.username.clone()));
+        // With a master password set, prefill the saved login for this device.
+        if let Some(master) = master_sel.lock().unwrap().clone() {
+            if let Ok(Some((user, pass))) = db_sel.lock().unwrap().credential_for_device(&master, &d.name) {
+                let _ = s.call_on_name("user", |v: &mut EditView| v.set_content(user));
+                let _ = s.call_on_name("pass", |v: &mut EditView| v.set_content(pass));
+            }
+        }
         let proto = match d.protocol.as_str() {
             "serial" => networking::Protocol::Serial,
             "telnet" => networking::Protocol::Telnet,
@@ -868,6 +1037,7 @@ fn connection_dialog(
     let cmds2 = Arc::clone(commands);
     let device2 = Arc::clone(device);
     let vendor2 = Arc::clone(vendor);
+    let master3 = Arc::clone(master);
     let session2 = Arc::clone(session);
     let notify2 = Arc::clone(notify);
 
@@ -916,7 +1086,7 @@ fn connection_dialog(
                         host: host.clone(),
                         port,
                         username: user.clone(),
-                        password: pass,
+                        password: pass.clone(),
                         vendor,
                     },
                 };
@@ -941,6 +1111,23 @@ fn connection_dialog(
                                     username: user.clone(),
                                 };
                                 let _ = db2.lock().unwrap().save_device(&dev);
+                                // Remember the login (encrypted) for next time.
+                                match (master3.lock().unwrap().clone(), user.is_empty() || pass.is_empty()) {
+                                    (Some(master), false) => {
+                                        if let Ok(id) = db2.lock().unwrap().save_credential(&master, &user, &pass) {
+                                            let _ = db2.lock().unwrap().link_credential(&name, id);
+                                        }
+                                    }
+                                    (None, false) => set_master_dialog(
+                                        s,
+                                        Arc::clone(&master3),
+                                        Arc::clone(&db2),
+                                        name.clone(),
+                                        user.clone(),
+                                        pass.clone(),
+                                    ),
+                                    _ => {}
+                                }
                                 // Switch the autocomplete tree to the selected vendor.
                                 *cmds2.write().unwrap() = CommandTree::load(vendor);
                                 append_output(s, &out2, &format!("% {desc} connected — session active (type 'disconnect' to close)\n"));
@@ -1059,6 +1246,7 @@ pub fn run() {
     let commands = Arc::new(RwLock::new(CommandTree::load(Vendor::Cisco)));
     let device = Arc::new(Mutex::new("local".to_string()));
     let vendor = Arc::new(Mutex::new(Vendor::Cisco));
+    let master = Arc::new(Mutex::new(vault::master_password()));
 
     let past = database
         .lock()
@@ -1068,19 +1256,7 @@ pub fn run() {
     let history = Arc::new(Mutex::new(History::from_lines(past)));
 
     let scheme_index = Arc::new(AtomicUsize::new(0));
-    {
-        let scheme_index = Arc::clone(&scheme_index);
-        siv.add_global_callback(Key::F2, move |s| {      // `s` is the &mut Cursive passed in
-            let next = (scheme_index.load(Ordering::Relaxed) + 1) % THEMES.len();
-            scheme_index.store(next, Ordering::Relaxed);
-
-            apply_scheme(s, next);                       // not &mut siv
-
-            s.call_on_name("terminal_output", |v: &mut TextView| {
-                v.append(format!("% Theme: {}\n", THEMES[next].0));
-            });
-        });
-    }
+    let initial = SCHEMES[0];
 
     let terminal = Arc::new(Mutex::new(cisco::Terminal {
         mode: cisco::CiscoTerminalMode::UserExec,
@@ -1100,7 +1276,7 @@ pub fn run() {
     );
 
     let text_view = TextView::new("")
-        .style(ColorStyle::primary())
+        .style(ColorStyle::new(initial.fg, initial.bg))
         .with_name("terminal_output");
 
     let terminal_output =
@@ -1122,7 +1298,7 @@ pub fn run() {
     let initial_prompt = terminal.lock().unwrap().prompt.clone();
 
     let prompt_view = TextView::new(initial_prompt)
-        .style(ColorStyle::title_primary())
+        .style(ColorStyle::new(initial.prompt, initial.bg))
         .with_name("prompt");
 
     let padded_prompt_view = PaddedView::new(Margins::lrtb(0, 1, 0, 0), prompt_view);
@@ -1156,26 +1332,43 @@ pub fn run() {
         &commands,
         &device,
         &vendor,
+        &master,
         &session,
         &notify,
     );
 
-    // Ctrl+T: cycle through the colour THEMES.
+    // Encrypted logins exist but no master password is known: ask for it.
+    // The connection dialog stays underneath and appears when this pops.
+    let needs_unlock = master.lock().unwrap().is_none()
+        && database
+            .lock()
+            .unwrap()
+            .has_credentials()
+            .unwrap_or(false);
+    if needs_unlock {
+        unlock_dialog(&mut siv, &database, &master);
+    }
+
+    // Ctrl+T: cycle through the colour schemes.
     {
         let scheme_index = Arc::clone(&scheme_index);
+        let output_buffer = Arc::clone(&output_buffer);
 
         siv.add_global_callback(Event::CtrlChar('t'), move |s| {
-            let next = (scheme_index.load(Ordering::Relaxed) + 1) % THEMES.len();
+            let next = (scheme_index.load(Ordering::Relaxed) + 1) % SCHEMES.len();
             scheme_index.store(next, Ordering::Relaxed);
 
             apply_scheme(s, next);
 
-            s.call_on_name("terminal_output", |v: &mut TextView| {
-                v.append(format!("% Theme: {}\n", THEMES[next].0));
-            });
+            append_output(
+                s,
+                &output_buffer,
+                &format!("% Theme: {}\n", SCHEMES[next].name),
+            );
         });
     }
 
     siv.set_fps(CURSOR_FPS);
     siv.run();
 }
+
