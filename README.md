@@ -16,7 +16,7 @@ TODO: terminal will accept list of commands and enters them into Cisco IOS in ba
 
 Written in Rush. `%LINK-3-UPDOWN` Cisco / Juniper / Mikrotik commands are listed in the YAML files. Autocomplete will also try to find a match in the comma`%LINK-3-UPDOWN`nd history, on this device or any other device (that user had a sess`%LINK-3-UPDOWN`ion with) from the same vendor. If there is any typo in the command, auto complete will handle it as an `*` regex.
 
-![alt text](image.png)
+![alt text](assets/image.png)
 
 ## Installation
 
