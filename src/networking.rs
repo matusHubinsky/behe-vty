@@ -101,10 +101,11 @@ pub fn open_console(path: &str, baud: u32) -> io::Result<Box<dyn serialport::Ser
         .open()?)
 }
 
-/// TCP "ping" of the service port: DNS resolve + connect with timeout.
-/// A hostname may resolve to several addresses (e.g. ::1 before 127.0.0.1),
-/// so try them all in order, like OpenSSH/PuTTY do.
-pub fn check_reachable(host: &str, port: u16) -> io::Result<()> {
+/// Resolve `host` and TCP-connect with a timeout. A hostname may resolve to
+/// several addresses (e.g. ::1 before 127.0.0.1), so try them all in order,
+/// like OpenSSH/PuTTY do. Bounded per address, so a silently dropping host
+/// fails fast instead of hanging on the OS default TCP timeout.
+fn connect_tcp(host: &str, port: u16) -> io::Result<TcpStream> {
     let addrs: Vec<_> = (host, port).to_socket_addrs()?.collect();
     if addrs.is_empty() {
         return Err(io::Error::new(
@@ -115,11 +116,16 @@ pub fn check_reachable(host: &str, port: u16) -> io::Result<()> {
     let mut last_err = None;
     for addr in &addrs {
         match TcpStream::connect_timeout(addr, CONNECT_TIMEOUT) {
-            Ok(_) => return Ok(()),
+            Ok(s) => return Ok(s),
             Err(e) => last_err = Some(e),
         }
     }
     Err(last_err.unwrap_or_else(|| io::Error::other(format!("cannot connect to {host}:{port}"))))
+}
+
+/// TCP "ping" of the service port: DNS resolve + connect with timeout.
+pub fn check_reachable(host: &str, port: u16) -> io::Result<()> {
+    connect_tcp(host, port).map(|_| ())
 }
 
 /// `host` or `host:port` (hostnames/IPv4 only — no IPv6 literals yet).
@@ -512,7 +518,7 @@ fn run_telnet(
     notify: Notify,
 ) {
     set_status(&inner, format!("connecting to {host}:{port}..."), &notify);
-    let stream = match TcpStream::connect((host, port)) {
+    let stream = match connect_tcp(host, port) {
         Ok(s) => s,
         Err(e) => {
             set_status(&inner, format!("connection failed: {e}"), &notify);
@@ -716,10 +722,26 @@ async fn ssh_session(
 ) {
     set_status(&inner, format!("connecting to {host}:{port}..."), notify);
     let config = Arc::new(russh::client::Config::default());
-    let mut handle = match russh::client::connect(config, (host, port), SshHandler).await {
-        Ok(h) => h,
-        Err(e) => {
+    // Bound the TCP connect: a host that silently drops packets must fail
+    // fast (like the reachability pre-check) instead of hanging on the OS
+    // default TCP timeout.
+    let mut handle = match tokio::time::timeout(
+        CONNECT_TIMEOUT,
+        russh::client::connect(config, (host, port), SshHandler),
+    )
+    .await
+    {
+        Ok(Ok(h)) => h,
+        Ok(Err(e)) => {
             set_status(&inner, format!("connection failed: {e}"), notify);
+            return;
+        }
+        Err(_) => {
+            set_status(
+                &inner,
+                format!("connection to {host}:{port} timed out after {}s", CONNECT_TIMEOUT.as_secs()),
+                notify,
+            );
             return;
         }
     };
@@ -1002,6 +1024,37 @@ mod tests {
         assert!(check_reachable("localhost", port).is_ok());
         drop(listener);
         assert!(check_reachable("localhost", port).is_err());
+    }
+
+    #[test]
+    fn test_connect_tcp_open_and_closed_port() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stream = connect_tcp("127.0.0.1", port).unwrap();
+        drop(stream);
+        drop(listener);
+        assert!(connect_tcp("127.0.0.1", port).is_err());
+    }
+
+    #[test]
+    fn test_connect_tcp_hostname_tries_all_resolved_addresses() {
+        // "localhost" typically resolves to ::1 first and 127.0.0.1 second;
+        // the connect must fall through to the address that actually listens.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(connect_tcp("localhost", port).is_ok());
+        drop(listener);
+        assert!(connect_tcp("localhost", port).is_err());
+    }
+
+    #[test]
+    fn test_connect_tcp_fails_fast_on_closed_port() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let start = std::time::Instant::now();
+        assert!(connect_tcp("127.0.0.1", port).is_err());
+        assert!(start.elapsed() < CONNECT_TIMEOUT + Duration::from_secs(5));
     }
 
     #[test]
