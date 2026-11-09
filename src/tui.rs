@@ -1275,14 +1275,7 @@ pub fn run() {
 ██████╔╝█████╗  ███████║█████╗█████╗██║   ██║   ██║    ╚████╔╝ 
 ██╔══██╗██╔══╝  ██╔══██║██╔══╝╚════╝╚██╗ ██╔╝   ██║     ╚██╔╝  
 ██████╔╝███████╗██║  ██║███████╗     ╚████╔╝    ██║      ██║   
-╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝      ╚═══╝     ╚═╝      ╚═╝ 
-*
-*
-*
-*
-*
-*
-")
+╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝      ╚═══╝     ╚═╝      ╚═╝")
         .style(ColorStyle::new(initial.fg, initial.bg))
         .with_name("terminal_output");
 
@@ -1326,7 +1319,7 @@ pub fn run() {
 
     siv.add_layer(
         Dialog::around(root)
-            .title("BEHE-VTY | TAB: complete | Ctrl+V: multiline | Ctrl+Z: send block")
+            .title("BEHE-VTY")
             .padding(Margins::lrtb(1, 1, 1, 1)), // keep padding; no title bar = max rows
     );
 
