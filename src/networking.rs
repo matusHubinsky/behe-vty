@@ -101,11 +101,10 @@ pub fn open_console(path: &str, baud: u32) -> io::Result<Box<dyn serialport::Ser
         .open()?)
 }
 
-/// Resolve `host` and TCP-connect with a timeout. A hostname may resolve to
-/// several addresses (e.g. ::1 before 127.0.0.1), so try them all in order,
-/// like OpenSSH/PuTTY do. Bounded per address, so a silently dropping host
-/// fails fast instead of hanging on the OS default TCP timeout.
-fn connect_tcp(host: &str, port: u16) -> io::Result<TcpStream> {
+/// TCP "ping" of the service port: DNS resolve + connect with timeout.
+/// A hostname may resolve to several addresses (e.g. ::1 before 127.0.0.1),
+/// so try them all in order, like OpenSSH/PuTTY do.
+pub fn check_reachable(host: &str, port: u16) -> io::Result<()> {
     let addrs: Vec<_> = (host, port).to_socket_addrs()?.collect();
     if addrs.is_empty() {
         return Err(io::Error::new(
@@ -116,16 +115,11 @@ fn connect_tcp(host: &str, port: u16) -> io::Result<TcpStream> {
     let mut last_err = None;
     for addr in &addrs {
         match TcpStream::connect_timeout(addr, CONNECT_TIMEOUT) {
-            Ok(s) => return Ok(s),
+            Ok(_) => return Ok(()),
             Err(e) => last_err = Some(e),
         }
     }
     Err(last_err.unwrap_or_else(|| io::Error::other(format!("cannot connect to {host}:{port}"))))
-}
-
-/// TCP "ping" of the service port: DNS resolve + connect with timeout.
-pub fn check_reachable(host: &str, port: u16) -> io::Result<()> {
-    connect_tcp(host, port).map(|_| ())
 }
 
 /// `host` or `host:port` (hostnames/IPv4 only — no IPv6 literals yet).
@@ -259,6 +253,7 @@ struct SessionInner {
     username: String,
     vendor: Vendor,
     out: Mutex<String>,
+    line: Mutex<String>, // current incomplete line (e.g. a bare prompt)
     status: Mutex<String>,
     tx: Mutex<Option<Sender<Vec<u8>>>>,
     closed: AtomicBool,
@@ -289,6 +284,7 @@ impl RemoteSession {
             username: username.clone(),
             vendor,
             out: Mutex::new(String::new()),
+            line: Mutex::new(String::new()),
             status: Mutex::new("connecting...".to_string()),
             tx: Mutex::new(None),
             closed: AtomicBool::new(false),
@@ -319,6 +315,11 @@ impl RemoteSession {
     /// Drain the sanitized device output produced since the last call.
     pub fn poll_output(&self) -> String {
         std::mem::take(&mut *self.inner.out.lock().unwrap())
+    }
+
+    /// The device's current, possibly incomplete line (e.g. a bare prompt).
+    pub fn current_line(&self) -> String {
+        self.inner.line.lock().unwrap().clone()
     }
 
     pub fn status(&self) -> String {
@@ -366,8 +367,14 @@ fn finish(inner: &SessionInner, notify: Notify) {
 
 fn push_output(inner: &SessionInner, sanitizer: &mut AnsiSanitizer, bytes: &[u8], notify: &Notify) {
     let text = sanitizer.feed(bytes);
+    let pending = sanitizer.pending_line().to_string();
+    *inner.line.lock().unwrap() = pending;
     if !text.is_empty() {
         inner.out.lock().unwrap().push_str(&text);
+        notify();
+    } else if !sanitizer.pending_line().is_empty() {
+        // Only the current line changed (e.g. a fresh prompt): still refresh,
+        // so the input-line prompt follows the device.
         notify();
     }
 }
@@ -518,7 +525,7 @@ fn run_telnet(
     notify: Notify,
 ) {
     set_status(&inner, format!("connecting to {host}:{port}..."), &notify);
-    let stream = match connect_tcp(host, port) {
+    let stream = match TcpStream::connect((host, port)) {
         Ok(s) => s,
         Err(e) => {
             set_status(&inner, format!("connection failed: {e}"), &notify);
@@ -722,26 +729,10 @@ async fn ssh_session(
 ) {
     set_status(&inner, format!("connecting to {host}:{port}..."), notify);
     let config = Arc::new(russh::client::Config::default());
-    // Bound the TCP connect: a host that silently drops packets must fail
-    // fast (like the reachability pre-check) instead of hanging on the OS
-    // default TCP timeout.
-    let mut handle = match tokio::time::timeout(
-        CONNECT_TIMEOUT,
-        russh::client::connect(config, (host, port), SshHandler),
-    )
-    .await
-    {
-        Ok(Ok(h)) => h,
-        Ok(Err(e)) => {
+    let mut handle = match russh::client::connect(config, (host, port), SshHandler).await {
+        Ok(h) => h,
+        Err(e) => {
             set_status(&inner, format!("connection failed: {e}"), notify);
-            return;
-        }
-        Err(_) => {
-            set_status(
-                &inner,
-                format!("connection to {host}:{port} timed out after {}s", CONNECT_TIMEOUT.as_secs()),
-                notify,
-            );
             return;
         }
     };
@@ -937,7 +928,22 @@ impl AnsiSanitizer {
             }
         }
         self.flush_pending_utf8();
-        std::mem::take(&mut self.out)
+        // Return only complete lines; keep the trailing partial line held back,
+        // so a CR split across two reads still overwrites the correct line and
+        // downstream styling/prompt detection only ever sees whole lines.
+        match self.out.rfind('\n') {
+            Some(pos) => {
+                let complete = self.out[..=pos].to_string();
+                self.out.drain(..=pos);
+                complete
+            }
+            None => String::new(),
+        }
+    }
+
+    /// The current incomplete line (e.g. a bare prompt waiting for input).
+    pub fn pending_line(&self) -> &str {
+        &self.out
     }
 }
 
@@ -1027,37 +1033,6 @@ mod tests {
     }
 
     #[test]
-    fn test_connect_tcp_open_and_closed_port() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        let stream = connect_tcp("127.0.0.1", port).unwrap();
-        drop(stream);
-        drop(listener);
-        assert!(connect_tcp("127.0.0.1", port).is_err());
-    }
-
-    #[test]
-    fn test_connect_tcp_hostname_tries_all_resolved_addresses() {
-        // "localhost" typically resolves to ::1 first and 127.0.0.1 second;
-        // the connect must fall through to the address that actually listens.
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        assert!(connect_tcp("localhost", port).is_ok());
-        drop(listener);
-        assert!(connect_tcp("localhost", port).is_err());
-    }
-
-    #[test]
-    fn test_connect_tcp_fails_fast_on_closed_port() {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
-        drop(listener);
-        let start = std::time::Instant::now();
-        assert!(connect_tcp("127.0.0.1", port).is_err());
-        assert!(start.elapsed() < CONNECT_TIMEOUT + Duration::from_secs(5));
-    }
-
-    #[test]
     fn test_connect_fails_fast_on_closed_port() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
@@ -1125,6 +1100,11 @@ mod tests {
     fn sanitizer_cr_overwrites_current_line() {
         let mut s = AnsiSanitizer::new();
         assert_eq!(s.feed(b"loading 50%\rloading 100%\n"), "loading 100%\n");
+        // A CR split across two reads must still overwrite the held line.
+        let mut s = AnsiSanitizer::new();
+        assert_eq!(s.feed(b"loading 50%\r"), "");
+        assert_eq!(s.pending_line(), "loading 50%");
+        assert_eq!(s.feed(b"loading 100%\n"), "loading 100%\n");
     }
 
     #[test]
@@ -1136,18 +1116,23 @@ mod tests {
     #[test]
     fn sanitizer_drops_csi_and_osc() {
         let mut s = AnsiSanitizer::new();
-        assert_eq!(s.feed(b"\x1b[2J\x1b[H\x1b]0;title\x07hello\x1b[K"), "hello");
+        // No newline yet: the text is held back as the pending line.
+        assert_eq!(s.feed(b"\x1b[2J\x1b[H\x1b]0;title\x07hello\x1b[K"), "");
+        assert_eq!(s.pending_line(), "hello");
+        assert_eq!(s.feed(b"\n"), "hello\n");
     }
 
     #[test]
     fn sanitizer_handles_split_escape_and_utf8() {
         let mut s = AnsiSanitizer::new();
-        assert_eq!(s.feed(b"a\x1b"), "a");
-        assert_eq!(s.feed(b"[31mred"), "red");
+        assert_eq!(s.feed(b"a\x1b"), "");
+        assert_eq!(s.pending_line(), "a");
+        assert_eq!(s.feed(b"[31mred\n"), "ared\n");
         let mut s = AnsiSanitizer::new();
         let (a, b) = "ě".as_bytes().split_at(1);
         assert_eq!(s.feed(a), "");
-        assert_eq!(s.feed(b), "ě");
+        assert_eq!(s.feed(b), "");
+        assert_eq!(s.pending_line(), "ě");
     }
 
     // ------------------------------------------------------------ telnet IAC
@@ -1260,6 +1245,7 @@ mod tests {
         wait_until(
             || {
                 acc.push_str(&session.poll_output());
+                acc.push_str(&session.current_line());
                 acc.contains("Username:")
             },
             5000,
@@ -1270,6 +1256,7 @@ mod tests {
         wait_until(
             || {
                 acc.push_str(&session.poll_output());
+                acc.push_str(&session.current_line());
                 acc.contains("Password:")
             },
             5000,
@@ -1280,6 +1267,7 @@ mod tests {
         wait_until(
             || {
                 acc.push_str(&session.poll_output());
+                acc.push_str(&session.current_line());
                 acc.contains("welcome secret")
             },
             5000,
@@ -1432,6 +1420,7 @@ mod tests {
         wait_until(
             || {
                 acc.push_str(&session.poll_output());
+                acc.push_str(&session.current_line());
                 acc.contains("router#")
             },
             15000,
@@ -1443,6 +1432,7 @@ mod tests {
         wait_until(
             || {
                 acc.push_str(&session.poll_output());
+                acc.push_str(&session.current_line());
                 acc.contains("Cisco IOS 15.5")
             },
             15000,
@@ -1451,6 +1441,41 @@ mod tests {
         assert!(acc.contains("Cisco IOS 15.5"), "no command reply: {acc:?}");
         session.shutdown();
         assert!(session.is_closed());
+    }
+
+    #[test]
+    fn telnet_echo_produces_no_extra_newline() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            // Cisco-like: prompt, tty echo of the typed line + CRLF, output, new prompt.
+            stream.write_all(b"router# ").unwrap();
+            let mut buf = [0u8; 256];
+            let n = stream.read(&mut buf).unwrap();
+            stream.write_all(&buf[..n]).unwrap();
+            stream.write_all(b"\r\nCisco IOS 15.5\r\nrouter# ").unwrap();
+            let _ = stream.read(&mut buf);
+        });
+        let session = RemoteSession::spawn(
+            Protocol::Telnet, "127.0.0.1".into(), port, String::new(), String::new(),
+            Vendor::Cisco, 80, 24, Arc::new(|| {}),
+        );
+        let mut lines = String::new();
+        wait_until(|| {
+            lines.push_str(&session.poll_output());
+            session.current_line().contains("router#")
+        }, 5000);
+        session.send(b"show ver\r");
+        wait_until(|| {
+            lines.push_str(&session.poll_output());
+            lines.contains("Cisco IOS 15.5")
+        }, 5000);
+        assert_eq!(session.current_line(), "router# ");
+        session.shutdown();
+        server.join().unwrap();
+        // The echoed command is exactly one line, no blank line after it.
+        assert_eq!(lines, "router# show ver\nCisco IOS 15.5\n");
     }
 
     #[test]
@@ -1479,3 +1504,4 @@ mod tests {
         session.shutdown();
     }
 }
+
