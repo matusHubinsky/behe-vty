@@ -13,15 +13,13 @@
 // limitations under the Licence.
 
 use cursive::event::{Event, EventResult, Key};
-use cursive::theme::{
-    BorderStyle, Color, ColorStyle, Palette, PaletteColor, Theme as CursiveTheme,
-};
+use cursive::theme::{Color, ColorStyle};
 use cursive::traits::*;
 use cursive::view::Margins;
 use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
 use crate::cisco;
 use crate::commands::{command_matches, CommandTree, Vendor};
@@ -65,89 +63,70 @@ struct Scheme {
     cursor: Color,
 }
 
-const SCHEMES: [Scheme; 5] = [
-    Scheme {
-        name: "Ubuntu",
-        bg: Color::Rgb(0x30, 0x0a, 0x24),     // #300A24 aubergine background
-        fg: Color::Rgb(0xff, 0xff, 0xff),     // white text
-        prompt: Color::Rgb(0xe9, 0x54, 0x20), // #E95420 ubuntu orange (prompt/titles)
-        ghost: Color::Rgb(0x8a, 0x6a, 0x7a),  // muted mauve (autocomplete ghost)
-        input_bg: Color::Rgb(0x30, 0x0a, 0x24),
-        cursor: Color::Rgb(0xff, 0xff, 0xff), // white blinking block
-    },
-    Scheme {
-        name: "Dark Purple",
-        bg: Color::Rgb(0x2a, 0x2a, 0x2a),
-        fg: Color::Rgb(0xee, 0xee, 0xee),
-        prompt: Color::Rgb(0x8a, 0x2b, 0xe2),
-        ghost: Color::Rgb(0x75, 0x75, 0x75),
-        input_bg: Color::Rgb(0x2a, 0x2a, 0x2a),
-        cursor: Color::Rgb(0xd0, 0xd0, 0xd0),
-    },
-    Scheme {
-        name: "Classic Green",
-        bg: Color::Rgb(0x00, 0x00, 0x00),
-        fg: Color::Rgb(0x33, 0xff, 0x33),
-        prompt: Color::Rgb(0x00, 0xcc, 0x00),
-        ghost: Color::Rgb(0x1f, 0x7a, 0x1f),
-        input_bg: Color::Rgb(0x00, 0x00, 0x00),
-        cursor: Color::Rgb(0x33, 0xff, 0x33),
-    },
-    Scheme {
-        name: "Amber",
-        bg: Color::Rgb(0x1a, 0x10, 0x00),
-        fg: Color::Rgb(0xff, 0xb0, 0x00),
-        prompt: Color::Rgb(0xff, 0x8c, 0x00),
-        ghost: Color::Rgb(0x8a, 0x60, 0x10),
-        input_bg: Color::Rgb(0x1a, 0x10, 0x00),
-        cursor: Color::Rgb(0xff, 0xb0, 0x00),
-    },
-    Scheme {
-        name: "Light",
-        bg: Color::Rgb(0xfa, 0xfa, 0xfa),
-        fg: Color::Rgb(0x22, 0x22, 0x22),
-        prompt: Color::Rgb(0x5b, 0x21, 0xb6),
-        ghost: Color::Rgb(0x9a, 0x9a, 0x9a),
-        input_bg: Color::Rgb(0xe8, 0xe8, 0xe8),
-        cursor: Color::Rgb(0x22, 0x22, 0x22),
-    },
+const THEMES: [(&str, &str); 5] = [
+    ("Ubuntu",        include_str!("../themes/ubuntu.toml")),
+    ("Dark Purple",   include_str!("../themes/dark_purple.toml")),
+    ("Classic Green", include_str!("../themes/classic_green.toml")),
+    ("Amber",         include_str!("../themes/amber.toml")),
+    ("Light",         include_str!("../themes/light.toml")),
 ];
 
-fn cursive_theme(scheme: &Scheme) -> CursiveTheme {
-    let mut palette = Palette::default();
-    palette[PaletteColor::Background] = scheme.bg;
-    palette[PaletteColor::View] = scheme.bg;
-    palette[PaletteColor::Primary] = scheme.fg;
-    palette[PaletteColor::Secondary] = scheme.fg;
-    palette[PaletteColor::Tertiary] = scheme.fg;
-    palette[PaletteColor::TitlePrimary] = scheme.prompt;
-    palette[PaletteColor::TitleSecondary] = scheme.prompt;
-    palette[PaletteColor::Highlight] = scheme.prompt;
-    palette[PaletteColor::HighlightInactive] = scheme.ghost;
-    palette[PaletteColor::HighlightText] = scheme.bg;
-    palette[PaletteColor::Shadow] = scheme.bg;
+fn apply_scheme(s: &mut Cursive, index: usize) {
+    let (name, toml) = THEMES[index % THEMES.len()];
+    if let Err(e) = s.load_toml(toml) {
+        eprintln!("Theme '{name}' failed to load: {e:?}");
+        return;
+    }
 
-    CursiveTheme {
-        shadow: false,
-        borders: BorderStyle::Simple, // outline always on
-        palette,
+    s.call_on_name("terminal_output", |v: &mut TextView| {
+        v.set_style(ColorStyle::primary());
+    });
+    s.call_on_name("prompt", |v: &mut TextView| {
+        v.set_style(ColorStyle::title_primary());
+    });
+}
+
+#[derive(serde::Deserialize)]
+struct SchemeToml {
+    colors: ColorsToml,
+}
+
+#[derive(serde::Deserialize)]
+struct ColorsToml {
+    background: Option<cursive::reexports::toml::Value>,
+    view: Option<cursive::reexports::toml::Value>,
+    primary: Option<cursive::reexports::toml::Value>,
+    tertiary: Option<cursive::reexports::toml::Value>,
+    title_primary: Option<cursive::reexports::toml::Value>,
+    highlight: Option<cursive::reexports::toml::Value>,
+}
+
+fn toml_color(v: Option<&cursive::reexports::toml::Value>) -> Option<Color> {
+    use cursive::reexports::toml::Value;
+    match v {
+        Some(Value::String(s)) => Color::parse(s),
+        Some(Value::Integer(i)) => Some(Color::from_256colors(*i as u8)),
+        _ => None,
     }
 }
 
-/// Apply a scheme to the whole UI.
-fn apply_scheme(s: &mut Cursive, index: usize) {
-    let scheme = SCHEMES[index];
-
-    s.set_theme(cursive_theme(&scheme));
-
-    s.call_on_name("terminal_output", |v: &mut TextView| {
-        v.set_style(ColorStyle::new(scheme.fg, scheme.bg));
-    });
-    s.call_on_name("prompt", |v: &mut TextView| {
-        v.set_style(ColorStyle::new(scheme.prompt, scheme.bg));
-    });
-}
-
+/// Parsed colours for each `THEMES` entry, same order; `name` comes from the tuple.
+static SCHEMES: LazyLock<[Scheme; 5]> = LazyLock::new(|| {
+    THEMES.map(|(name, src)| {
+        let c: SchemeToml =
+            cursive::reexports::toml::from_str(src).expect("embedded theme must parse");
+        let col = &c.colors;
+        Scheme {
+            name,
+            bg: toml_color(col.background.as_ref()).unwrap_or(Color::TerminalDefault),
+            fg: toml_color(col.primary.as_ref()).unwrap_or(Color::TerminalDefault),
+            prompt: toml_color(col.title_primary.as_ref()).unwrap_or(Color::TerminalDefault),
+            ghost: toml_color(col.tertiary.as_ref()).unwrap_or(Color::TerminalDefault),
+            input_bg: toml_color(col.view.as_ref()).unwrap_or(Color::TerminalDefault),
+            cursor: toml_color(col.highlight.as_ref()).unwrap_or(Color::TerminalDefault),
+        }
+    })
+});
 // ---------------------------------------------------------------- history
 
 struct History {
@@ -721,7 +700,7 @@ impl InputView {
 
 impl View for InputView {
     fn draw(&self, printer: &Printer) {
-        let sc = SCHEMES[self.scheme.load(Ordering::Relaxed)];
+        let sc = SCHEMES[self.scheme.load(Ordering::Relaxed) % SCHEMES.len()];
         let normal = ColorStyle::new(sc.fg, sc.input_bg);
         let ghost = ColorStyle::new(sc.ghost, sc.input_bg);
         let cur = ColorStyle::new(sc.input_bg, sc.cursor);
@@ -1654,4 +1633,3 @@ mod tests {
         assert_eq!(rich, "router# show ver\n");
     }
 }
-
