@@ -27,7 +27,12 @@ pub enum Vendor {
 
 impl Vendor {
     pub fn all() -> &'static [Vendor] {
-        &[Vendor::Cisco, Vendor::Juniper, Vendor::Mikrotik]
+        &[
+            Vendor::Cisco,
+            Vendor::Juniper,
+            Vendor::Mikrotik,
+            Vendor::Other,
+        ]
     }
 
     pub fn label(&self) -> &'static str {
@@ -35,7 +40,7 @@ impl Vendor {
             Vendor::Cisco => "Cisco",
             Vendor::Juniper => "Juniper",
             Vendor::Mikrotik => "Mikrotik",
-            Vendor::Other => "Not supported!",
+            Vendor::Other => "Unsupported",
         }
     }
 
@@ -61,7 +66,8 @@ impl CommandTree {
             Vendor::Cisco => include_str!("../commands/cisco.yaml"),
             Vendor::Juniper => include_str!("../commands/juniper.yaml"),
             Vendor::Mikrotik => include_str!("../commands/mikrotik.yaml"),
-            Vendor::Other => todo!(),
+            // Unknown vendor: no command templates, autocomplete finds nothing.
+            Vendor::Other => return Self { modes: BTreeMap::new() },
         };
         let modes: BTreeMap<String, Vec<String>> =
             serde_yml::from_str(text).expect("invalid commands yaml");
@@ -124,8 +130,15 @@ mod tests {
         assert_eq!(Vendor::parse("CheckPoint"), Vendor::Other);
         assert_eq!(Vendor::parse("--; DROP ALL;"), Vendor::Other);
         assert_eq!(Vendor::parse("rm -rf"), Vendor::Other);
-        assert_eq!(Vendor::all().len(), 3);
+        assert_eq!(Vendor::all().len(), 4);
         assert_eq!(Vendor::Cisco.label(), "Cisco");
+        assert_eq!(Vendor::Other.label(), "Unsupported");
+    }
+
+    #[test]
+    fn test_other_vendor_loads_empty_tree_instead_of_panicking() {
+        let tree = CommandTree::load(Vendor::Other);
+        assert!(tree.autocomplete(&CiscoTerminalMode::UserExec, "show").is_empty());
     }
 
     #[test]
@@ -173,6 +186,9 @@ mod tests {
     #[test]
     fn test_all_vendor_trees_load() {
         for v in Vendor::all() {
+            if *v == Vendor::Other {
+                continue; // unknown vendor: empty tree by design
+            }
             let tree = CommandTree::load(*v);
             assert!(!tree
                 .autocomplete(&CiscoTerminalMode::UserExec, "")
@@ -180,3 +196,4 @@ mod tests {
         }
     }
 }
+
