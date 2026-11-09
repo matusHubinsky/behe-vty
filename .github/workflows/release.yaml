@@ -4,8 +4,16 @@ on:
   push:
     tags: [ "v*" ]
 
+# Required: without this the default GITHUB_TOKEN is read-only and
+# action-gh-release fails with "Resource not accessible by integration"
+# when it tries to create/update the release for the tag.
+permissions:
+  contents: write
+
 env:
   CARGO_TERM_COLOR: always
+  CARGO_HOME: /home/runner/.cargo
+  CARGO_INCREMENTAL: 0
 
 jobs:
   release:
@@ -58,3 +66,4 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/${{ matrix.artifact }}
+          overwrite_files: true
