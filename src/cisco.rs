@@ -119,7 +119,9 @@ pub fn terminal(term: &mut Terminal) {
     term.output = if known {
         input
     } else {
-        format!("\n{input}: command not found")
+        // No leading '\n': the caller already ended the echo line, a blank
+        // line here would show up as an extra newline after every command.
+        format!("{input}: command not found")
     };
 
     term.prompt = switch_mode(&term.mode);
@@ -206,7 +208,7 @@ mod tests {
         let term = run(CiscoTerminalMode::UserExec, ">", "UnknownMode");
         assert_eq!(term.mode, CiscoTerminalMode::UserExec);
         assert_eq!(term.prompt.trim(), ">");
-        assert_eq!(term.output, "\nUnknownMode: command not found");
+        assert_eq!(term.output, "UnknownMode: command not found");
     }
 
     #[test]
@@ -214,7 +216,7 @@ mod tests {
         let term = run(CiscoTerminalMode::PrivilegedExec, "#", "UnknownMode");
         assert_eq!(term.mode, CiscoTerminalMode::PrivilegedExec);
         assert_eq!(term.prompt.trim(), "#");
-        assert_eq!(term.output, "\nUnknownMode: command not found");
+        assert_eq!(term.output, "UnknownMode: command not found");
     }
 
     #[test]
