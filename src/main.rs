@@ -19,6 +19,36 @@ mod tui;
 mod vault;
 mod networking;
 
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const NAME: &str = env!("CARGO_PKG_NAME");
+pub const DESCRIPTION: &str = env!("CARGO_PKG_DESCRIPTION");
+pub const AUTHORS: &str = env!("CARGO_PKG_AUTHORS");
+pub const LICENSE: &str = env!("CARGO_PKG_LICENSE");
+pub const HOMEPAGE: &str = env!("CARGO_PKG_HOMEPAGE");
+
+fn print_version() {
+    println!("{NAME} {VERSION}");
+    println!("{DESCRIPTION}");
+    println!("{AUTHORS} | {LICENSE} | {HOMEPAGE}");
+}
+
 fn main() {
+    print_version();
+    #[cfg(windows)]
+    {
+        // VERSIONINFO wants four numeric parts: 1.0.4 -> 1.0.4.0
+        let ver = env!("CARGO_PKG_VERSION");
+        let file_version = if ver.matches('.').count() == 2 {
+            format!("{ver}.0")
+        } else {
+            ver.to_string()
+        };
+        winres::WindowsResource::new()
+            .set("FileVersion", &file_version)
+            .set("ProductVersion", &file_version)
+            .compile()
+            .expect("failed to embed Windows version resource");
+    }
+    println!("cargo:rerun-if-changed=build.rs");
     tui::run();
 }

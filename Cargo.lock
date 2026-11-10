@@ -139,7 +139,7 @@ dependencies = [
 
 [[package]]
 name = "behe-vty"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -152,6 +152,7 @@ dependencies = [
  "serde_yml",
  "serialport",
  "tokio",
+ "winres",
 ]
 
 [[package]]
@@ -520,7 +521,7 @@ dependencies = [
  "num",
  "parking_lot",
  "serde_json",
- "toml",
+ "toml 1.1.8+spec-1.1.0",
  "unicode-segmentation",
  "unicode-width 0.2.3",
  "xi-unicode",
@@ -2369,6 +2370,15 @@ dependencies = [
 
 [[package]]
 name = "toml"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "toml"
 version = "1.1.8+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20489e00e4d8741d6be680764cc12e270655e375a20d1011e844a9c3379e678d"
@@ -2765,6 +2775,15 @@ name = "winnow"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
+
+[[package]]
+name = "winres"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b68db261ef59e9e52806f688020631e987592bd83619edccda9c47d42cde4f6c"
+dependencies = [
+ "toml 0.5.11",
+]
 
 [[package]]
 name = "wit-bindgen-rt"
