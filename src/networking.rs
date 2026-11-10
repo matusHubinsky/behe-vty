@@ -615,28 +615,58 @@ impl russh::client::Handler for SshHandler {
 /// Authenticate like the `ssh` CLI does: ssh-agent identities first, then the
 /// default identity files (~/.ssh/id_*), then the password (dialog field or
 /// BEHE_PASSWORD), then an empty password.
+type BoxedAgentClient = russh::keys::agent::client::AgentClient<
+    Box<dyn russh::keys::agent::client::AgentStream + Send + Unpin>,
+>;
+
+/// Connect to the local ssh-agent: SSH_AUTH_SOCK on unix, the
+/// openssh-ssh-agent named pipe (or Pageant) on Windows.
+async fn connect_ssh_agent() -> Option<BoxedAgentClient> {
+    use russh::keys::agent::client::AgentClient;
+
+    #[cfg(unix)]
+    {
+        if let Ok(agent) = AgentClient::connect_env().await {
+            return Some(agent.dynamic());
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        let pipe = std::env::var("SSH_AUTH_SOCK")
+            .unwrap_or_else(|_| r"\\.\pipe\openssh-ssh-agent".to_string());
+        if let Ok(agent) = AgentClient::connect_named_pipe(pipe).await {
+            return Some(agent.dynamic());
+        }
+        if let Ok(agent) = AgentClient::connect_pageant().await {
+            return Some(agent.dynamic());
+        }
+    }
+
+    None
+}
+
 async fn authenticate(
     handle: &mut russh::client::Handle<SshHandler>,
     user: &str,
     password: &str,
 ) -> Result<(), String> {
-    // 1. ssh-agent (SSH_AUTH_SOCK), same keys as the `ssh` command.
-    if std::env::var_os("SSH_AUTH_SOCK").is_some() {
-        if let Ok(mut agent) = russh::keys::agent::client::AgentClient::connect_env().await {
-            if let Ok(identities) = agent.request_identities().await {
-                for identity in identities {
-                    let result = handle
-                        .authenticate_publickey_with(
-                            user,
-                            identity.public_key().into_owned(),
-                            None,
-                            &mut agent,
-                        )
-                        .await;
-                    if let Ok(result) = result {
-                        if result.success() {
-                            return Ok(());
-                        }
+    // 1. ssh-agent (unix: SSH_AUTH_SOCK; windows: named pipe / Pageant),
+    //    same keys as the `ssh` command.
+    if let Some(mut agent) = connect_ssh_agent().await {
+        if let Ok(identities) = agent.request_identities().await {
+            for identity in identities {
+                let result = handle
+                    .authenticate_publickey_with(
+                        user,
+                        identity.public_key().into_owned(),
+                        None,
+                        &mut agent,
+                    )
+                    .await;
+                if let Ok(result) = result {
+                    if result.success() {
+                        return Ok(());
                     }
                 }
             }
@@ -1504,4 +1534,3 @@ mod tests {
         session.shutdown();
     }
 }
-
