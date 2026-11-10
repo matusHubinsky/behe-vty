@@ -34,21 +34,5 @@ fn print_version() {
 
 fn main() {
     print_version();
-    #[cfg(windows)]
-    {
-        // VERSIONINFO wants four numeric parts: 1.0.4 -> 1.0.4.0
-        let ver = env!("CARGO_PKG_VERSION");
-        let file_version = if ver.matches('.').count() == 2 {
-            format!("{ver}.0")
-        } else {
-            ver.to_string()
-        };
-        winres::WindowsResource::new()
-            .set("FileVersion", &file_version)
-            .set("ProductVersion", &file_version)
-            .compile()
-            .expect("failed to embed Windows version resource");
-    }
-    println!("cargo:rerun-if-changed=build.rs");
     tui::run();
 }

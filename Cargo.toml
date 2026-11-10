@@ -9,6 +9,7 @@ repository = "https://github.com/matusHubinsky/behe-vty"
 license = "EUPL-1.2-only"
 keywords = ["networking", "termina", "console", "auto-complete"]
 publish = false
+build = "src/build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

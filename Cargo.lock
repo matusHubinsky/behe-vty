@@ -139,7 +139,7 @@ dependencies = [
 
 [[package]]
 name = "behe-vty"
-version = "1.1.0"
+version = "1.1.2"
 dependencies = [
  "aes-gcm",
  "argon2",
