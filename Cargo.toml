@@ -1,6 +1,6 @@
 [package]
 name = "behe-vty"
-version = "1.1.0"
+version = "1.1.2"
 authors = ["Matus Hubinsky"]
 edition = '2024'
 description = "Cisco VTY auto-suggestion terminal client"
