@@ -12,11 +12,13 @@ This is a Rust terminal wrapper that provides the typo-free autocomplete into th
 Cisco `%LINK-*-CHANGED` messaged are ignored and will never appear at the terminal input.
 TODO: terminal will accept list of commands and enters them into Cisco IOS in batches to be excecuted one by one, each line ends with CTLN+Z.
 
+![alt text](assets/image-001.png)
+
 ## About 
 
 Written in Rush. `%LINK-3-UPDOWN` Cisco / Juniper / Mikrotik commands are listed in the YAML files. Autocomplete will also try to find a match in the comma`%LINK-3-UPDOWN`nd history, on this device or any other device (that user had a sess`%LINK-3-UPDOWN`ion with) from the same vendor. If there is any typo in the command, auto complete will handle it as an `*` regex.
 
-![alt text](assets/image-001.png)
+![alt text](assets/image-002.png)
 
 ## Installation
 
