@@ -31,7 +31,24 @@ use crate::vault;
 
 const INPUT_WIDTH: usize = 72;
 const CURSOR_FPS: u32 = 24;
-const BASE_TITLE: &str = "BEHE-VTY | TAB: complete";
+const BASE_TITLE: &str = "BEHE-VTY";
+
+/// Censorship of sensitive tokens is OFF by default and toggled with Ctrl+H
+/// ("hide"): while on, `render_output` replaces logins/IPs/domains/ports with
+/// the censorship block and the window title is masked too.
+static CENSOR_ON: AtomicBool = AtomicBool::new(false);
+
+/// Last session label shown in the window title, so the Ctrl+H toggle can
+/// re-render the title with or without censorship.
+static SESSION_DESC: Mutex<Option<String>> = Mutex::new(None);
+
+fn censor_on() -> bool {
+    CENSOR_ON.load(Ordering::SeqCst)
+}
+
+fn set_censor_on(v: bool) {
+    CENSOR_ON.store(v, Ordering::SeqCst);
+}
 const LOGO: &str = "
 ██████╗ ███████╗██╗  ██╗███████╗    ██╗   ██╗████████╗██╗   ██╗
 ██╔══██╗██╔════╝██║  ██║██╔════╝    ██║   ██║╚══██╔══╝╚██╗ ██╔╝
@@ -43,15 +60,37 @@ const LOGO: &str = "
 /// While a remote session is active the window title carries the session label
 /// ("telnet lab.com:23 ...") and the input line shows the device's own prompt.
 fn set_app_title(s: &mut Cursive, session: Option<&str>) {
+    *SESSION_DESC.lock().unwrap() = session.map(|d| d.to_string());
     let title = match session {
         Some(desc) => {
             // The title bar shows the session label (host:port, user@host):
-            // censor sensitive tokens there too.
-            format!("BEHE-VTY | {}", censor_sensitive(desc))
+            // mask it only while the Ctrl+H censorship toggle is on.
+            let shown = if censor_on() {
+                censor_sensitive(desc)
+            } else {
+                desc.to_string()
+            };
+            format!("BEHE-VTY | {shown}")
         }
         None => BASE_TITLE.to_string(),
     };
     s.call_on_name("app_dialog", |d: &mut Dialog| d.set_title(title));
+}
+
+/// Ctrl+H ("hide"): toggle censorship of sensitive tokens in the scrollback
+/// and the window title. The raw scrollback buffer is re-rendered on every
+/// toggle, so revealing again loses nothing. Pre-event, so the input line
+/// never consumes it (crossterm delivers 0x08 as CtrlChar('h'), distinct
+/// from the 0x7F Backspace key).
+fn bind_hide_key(siv: &mut Cursive, output_buffer: &OutputBuffer) {
+    let output_buffer = Arc::clone(output_buffer);
+    siv.set_on_pre_event(Event::CtrlChar('h'), move |s| {
+        set_censor_on(!censor_on());
+        let snapshot = output_buffer.lock().unwrap().display("");
+        set_terminal_output(s, snapshot);
+        let desc = SESSION_DESC.lock().unwrap().clone();
+        set_app_title(s, desc.as_deref());
+    });
 }
 
 // ---------------------------------------------------------------- colour schemes
@@ -350,14 +389,15 @@ fn copy_current_selection(s: &mut Cursive) -> bool {
     }
 }
 
-/// Replace the scrollback content (censored + status-colored via
-/// `render_output`) and force the terminal view to the bottom, so every Enter
-/// and every shell/vty update lands on the newest line even if the user
-/// scrolled up before (a manual scroll resets the scroll strategy to
-/// `KeepRow`, so re-assert `StickToBottom` here on every update).
+/// Replace the scrollback content (status-colored via `render_output`, plus
+/// censored when the Ctrl+H hide toggle is on) and force the terminal view to
+/// the bottom, so every Enter and every shell/vty update lands on the newest
+/// line even if the user scrolled up before (a manual scroll resets the
+/// scroll strategy to `KeepRow`, so re-assert `StickToBottom` here on every
+/// update).
 fn set_terminal_output(s: &mut Cursive, snapshot: String) {
     s.call_on_name("terminal_output", |v: &mut TextView| {
-        v.set_content(render_output(&snapshot, None));
+        v.set_content(render_output(&snapshot, None, censor_on()));
     });
     // The named view wraps the ScrollView around the named TextView, so the
     // type is ScrollMouse — with the wrong type the downcast silently fails
@@ -750,15 +790,21 @@ fn is_status_line(line: &str) -> bool {
     false
 }
 
-/// Build the scrollback content as styled spans: sensitive tokens censored,
-/// Cisco status lines in the theme highlight color, and the selected rows
-/// (whole lines from anchor to current row) in reverse video on top.
-fn render_output(src: &str, sel: Selection) -> StyledString {
+/// Build the scrollback content as styled spans: Cisco status lines in the
+/// theme highlight color, the selected rows (whole lines from anchor to
+/// current row) in reverse video on top, and — only when `censor` is on
+/// (the Ctrl+H hide toggle) — sensitive tokens replaced with the censorship
+/// block.
+fn render_output(src: &str, sel: Selection, censor: bool) -> StyledString {
     use cursive::style::Style;
     let mut out = StyledString::default();
     let range = sel.map(|(a, c)| a.y.min(c.y)..=a.y.max(c.y));
     for (i, line) in src.split_inclusive('\n').enumerate() {
-        let censored = censor_sensitive(line);
+        let censored = if censor {
+            censor_sensitive(line)
+        } else {
+            line.to_string()
+        };
         let mut style = Style::default();
         if is_status_line(line) {
             style = style.combine(ColorStyle::highlight());
@@ -793,7 +839,7 @@ impl ScrollMouse {
         let sel = self.selection;
         let _ = ViewWrapper::with_view_mut(self.inner.get_inner_mut(), |tv: &mut TextView| {
             let src = tv.get_content().source().to_string();
-            tv.set_content(render_output(&src, sel));
+            tv.set_content(render_output(&src, sel, censor_on()));
         });
     }
 
@@ -2218,6 +2264,7 @@ pub fn run() {
     }));
 
     let output_buffer: OutputBuffer = Arc::new(Mutex::new(Scrollback::new()));
+    bind_hide_key(&mut siv, &output_buffer);
     let session: Arc<Mutex<Option<networking::RemoteSession>>> = Arc::new(Mutex::new(None));
     let notify = make_notifier(
         siv.cb_sink().clone(),
@@ -2400,8 +2447,9 @@ mod tests {
     }
 
     /// Builds the same view tree as `run()` (scrollback over a 1-row input
-    /// line inside a padded dialog) on a fixed-size backend.
-    fn test_runner() -> cursive::CursiveRunner<&'static mut Cursive> {
+    /// line inside a padded dialog) on a fixed-size backend, with the Ctrl+H
+    /// hide keybind installed on the shared scrollback buffer.
+    fn test_runner() -> (cursive::CursiveRunner<&'static mut Cursive>, OutputBuffer) {
         let siv = Box::leak(Box::new(Cursive::new()));
         let text_view = TextView::new("").with_name("terminal_output");
         let scroll = ScrollMouse::new(
@@ -2412,18 +2460,22 @@ mod tests {
             .child(ResizedView::with_full_height(scroll))
             .child(EditView::new().with_name("input").full_width());
         siv.add_layer(
-            Dialog::around(ResizedView::with_full_screen(layout)).padding(Margins::lrtb(1, 1, 1, 1)),
+            Dialog::around(ResizedView::with_full_screen(layout))
+                .padding(Margins::lrtb(1, 1, 1, 1))
+                .with_name("app_dialog"),
         );
+        let buffer: OutputBuffer = Arc::new(Mutex::new(Scrollback::new()));
+        bind_hide_key(siv, &buffer);
         let mut runner = siv.runner(Box::new(FixedBackend {
             size: Vec2::new(80, 24),
         }));
         runner.refresh();
-        runner
+        (runner, buffer)
     }
 
     #[test]
     fn set_terminal_output_snaps_to_bottom_after_enter_and_after_scroll_up() {
-        let mut runner = test_runner();
+        let (mut runner, _buffer) = test_runner();
         let lines = |n: usize| (0..n).map(|i| format!("line {i}\n")).collect::<String>();
 
         // Enter appends output taller than the viewport: must land at the bottom.
@@ -2461,9 +2513,72 @@ mod tests {
     }
 
     #[test]
+    fn render_output_censor_flag_controls_masking() {
+        let src = "ping 10.0.0.1\n";
+        // Censorship off (the default): raw text is shown.
+        assert_eq!(render_output(src, None, false).source(), "ping 10.0.0.1\n");
+        // Censorship on (Ctrl+H): sensitive tokens become the block.
+        assert_eq!(render_output(src, None, true).source(), format!("ping {CENSOR}\n"));
+        // Status-line coloring is independent of the censor flag.
+        let status = "%LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down\n";
+        for flag in [false, true] {
+            let styled = render_output(status, None, flag);
+            let spans: Vec<_> = styled.spans().collect();
+            assert_eq!(spans.len(), 1);
+            assert!(spans[0].attr.color != cursive::style::ColorStyle::inherit_parent());
+        }
+    }
+
+    #[test]
+    fn ctrl_h_toggles_censorship_in_scrollback_and_title() {
+        let (mut runner, buffer) = test_runner();
+        set_censor_on(false);
+
+        // Seed the scrollback through the buffer, like append_output does.
+        let snapshot = {
+            let mut b = buffer.lock().unwrap();
+            b.push("router# ping 10.0.0.1\n");
+            b.display("")
+        };
+        set_terminal_output(&mut runner, snapshot);
+        set_app_title(&mut runner, Some("telnet 10.0.0.1:23"));
+        runner.refresh();
+
+        let shown = |r: &mut cursive::CursiveRunner<&'static mut Cursive>| {
+            r.call_on_name("terminal_output", |v: &mut TextView| {
+                v.get_content().source().to_string()
+            })
+            .unwrap()
+        };
+        let title = |r: &mut cursive::CursiveRunner<&'static mut Cursive>| {
+            r.call_on_name("app_dialog", |d: &mut Dialog| d.get_title().to_string())
+                .unwrap_or_default()
+        };
+
+        // Default: raw — Enter alone no longer censors.
+        assert_eq!(shown(&mut runner), "router# ping 10.0.0.1\n");
+        assert!(title(&mut runner).contains("10.0.0.1"));
+
+        // Ctrl+H hides: scrollback and window title are censored.
+        runner.on_event(Event::CtrlChar('h'));
+        runner.refresh();
+        assert_eq!(shown(&mut runner), format!("router# ping {CENSOR}\n"));
+        assert!(!title(&mut runner).contains("10.0.0.1"));
+        assert!(title(&mut runner).contains(CENSOR));
+
+        // Ctrl+H again reveals the raw buffer — nothing was destroyed.
+        runner.on_event(Event::CtrlChar('h'));
+        runner.refresh();
+        assert_eq!(shown(&mut runner), "router# ping 10.0.0.1\n");
+        assert!(title(&mut runner).contains("10.0.0.1"));
+
+        set_censor_on(false);
+    }
+
+    #[test]
     fn render_output_marks_only_selected_rows() {
         let src = "line 0\nline 1\nline 2\nline 3\n";
-        let styled = render_output(src, Some((Vec2::new(0, 1), Vec2::new(0, 2))));
+        let styled = render_output(src, Some((Vec2::new(0, 1), Vec2::new(0, 2))), false);
         assert_eq!(styled.source(), src);
         use cursive::style::EffectStatus;
         let spans: Vec<_> = styled.spans().collect();
@@ -2476,7 +2591,7 @@ mod tests {
         assert!(rev(&spans[2]));
         assert!(!rev(&spans[3]));
         // No selection -> all plain.
-        let plain = render_output(src, None);
+        let plain = render_output(src, None, false);
         assert!(plain.spans().all(|s| !rev(&s)));
     }
 
@@ -2568,7 +2683,7 @@ mod tests {
     #[test]
     fn render_output_censors_login_prompt_and_colors_status_line() {
         let src = "Username: admin\n%LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down\n";
-        let styled = render_output(src, None);
+        let styled = render_output(src, None, true);
         assert_eq!(
             styled.source(),
             format!("Username: {CENSOR}\n%LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down\n")
@@ -2599,7 +2714,7 @@ mod tests {
 
         // Status line gets the highlight color; a normal line does not.
         let src = "router# show ver\n%SYS-5-CONFIG_I: done\n";
-        let styled = render_output(src, None);
+        let styled = render_output(src, None, false);
         assert_eq!(styled.source(), src);
         let spans: Vec<_> = styled.spans().collect();
         assert_eq!(spans.len(), 2);
@@ -2608,8 +2723,8 @@ mod tests {
         };
         assert!(!highlighted(&spans[0]));
         assert!(highlighted(&spans[1]));
-        // Censoring applies in the same pass.
-        let censored = render_output("ping 10.0.0.1\n", None);
+        // With the censor flag on, censoring applies in the same pass.
+        let censored = render_output("ping 10.0.0.1\n", None, true);
         assert_eq!(censored.source(), format!("ping {CENSOR}\n"));
     }
 
@@ -2653,7 +2768,7 @@ mod tests {
     #[test]
     fn render_output_colors_status_and_censors_ip_in_one_line() {
         let src = "%DUAL-5-NBRCHANGE: IP-EIGRP 1: Neighbor 10.1.1.1 (Serial0/0) is down\n";
-        let styled = render_output(src, None);
+        let styled = render_output(src, None, true);
         assert!(!styled.source().contains("10.1.1.1"));
         assert!(styled.source().contains(CENSOR));
         let spans: Vec<_> = styled.spans().collect();
@@ -2663,7 +2778,7 @@ mod tests {
 
     #[test]
     fn mouse_drag_selects_scrollback_rows() {
-        let mut runner = test_runner();
+        let (mut runner, _buffer) = test_runner();
         let lines = |n: usize| (0..n).map(|i| format!("line {i}\n")).collect::<String>();
         set_terminal_output(&mut runner, lines(40));
         runner.refresh();
