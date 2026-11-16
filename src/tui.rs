@@ -2838,4 +2838,3 @@ mod tests {
         assert_eq!(sel, None, "plain click must clear the selection");
     }
 }
-

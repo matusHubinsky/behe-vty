@@ -3,12 +3,13 @@ name = "behe-vty"
 version = "1.1.3"
 authors = ["Matus Hubinsky"]
 edition = '2024'
-description = "Terminal wrapper that provides the autocomplete into the Cisco terminal."
+description = "Cisco VTY auto-suggestion terminal client"
 readme = "README.md"
 repository = "https://github.com/matusHubinsky/behe-vty"
-license = "EUPL-1.2"
+license = "EUPL-1.2-only"
 keywords = ["networking", "termina", "console", "auto-complete"]
 publish = false
+build = "src/build.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -24,3 +25,13 @@ russh = "0.65"
 rand = "0.10.3"
 argon2 = "0.6"
 aes-gcm = "0.11"
+
+[package.metadata.winres]
+OriginalFilename = "behe-vty.exe"
+ProductName = "behe-vty"
+FileDescription = "Cisco VTY auto-suggestion terminal client"
+CompanyName = "Matus Hubinsky"
+LegalCopyright = "EUPL-1.2-only (c) Matus Hubinsky"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1"
