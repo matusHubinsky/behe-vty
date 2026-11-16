@@ -267,9 +267,11 @@ impl Database {
     }
 
     pub fn list_devices(&self) -> Result<Vec<Device>> {
+        // Group by hostname, then port: same host on ssh (22) and telnet (23)
+        // lists as adjacent, separate sessions.
         let mut stmt = self
             .conn
-            .prepare("SELECT name, host, port, protocol, vendor, username FROM devices ORDER BY name")?;
+            .prepare("SELECT name, host, port, protocol, vendor, username FROM devices ORDER BY host, port, name")?;
 
         let rows = stmt.query_map([], |row| {
             Ok(Device {
@@ -360,6 +362,37 @@ mod tests {
         assert!(db.delete_device("core").unwrap());
         assert!(!db.delete_device("core").unwrap()); // already gone
         assert!(db.get_device("core").unwrap().is_none());
+    }
+
+    #[test]
+    fn test_devices_grouped_by_host_then_port() {
+        let db = test_db();
+        let dev = |name: &str, host: &str, port: u16| Device {
+            name: name.to_string(),
+            host: host.to_string(),
+            port,
+            protocol: if port == 23 { "telnet".to_string() } else { "ssh".to_string() },
+            vendor: "cisco".to_string(),
+            username: String::new(),
+        };
+        // Same host on two ports must stay two separate saved sessions.
+        db.save_device(&dev("10.0.0.1:23", "10.0.0.1", 23)).unwrap();
+        db.save_device(&dev("10.0.0.1:22", "10.0.0.1", 22)).unwrap();
+        db.save_device(&dev("10.0.0.2:22", "10.0.0.2", 22)).unwrap();
+        // Re-saving the same host:port upserts in place, no duplicate.
+        db.save_device(&dev("10.0.0.1:22", "10.0.0.1", 22)).unwrap();
+
+        let rows = db.list_devices().unwrap();
+        let keys: Vec<(String, u16)> = rows.iter().map(|d| (d.host.clone(), d.port)).collect();
+        assert_eq!(
+            keys,
+            vec![
+                ("10.0.0.1".to_string(), 22),
+                ("10.0.0.1".to_string(), 23),
+                ("10.0.0.2".to_string(), 22),
+            ]
+        );
+        assert_eq!(rows.len(), 3);
     }
 
     #[test]
