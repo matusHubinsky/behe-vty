@@ -50,6 +50,17 @@ fn set_censor_on(v: bool) {
     CENSOR_ON.store(v, Ordering::SeqCst);
 }
 const LOGO: &str = "
+TAB: auto-complete
+
+CTRL+H: hide
+CTRL+V: paste (bulk commands)
+CTRL+T: change theme
+Ctrl+Z: send the whole buffer 
+
+Key::Up:    revious command
+Key::Right: accept the suggestion
+
+
 ██████╗ ███████╗██╗  ██╗███████╗    ██╗   ██╗████████╗██╗   ██╗
 ██╔══██╗██╔════╝██║  ██║██╔════╝    ██║   ██║╚══██╔══╝╚██╗ ██╔╝
 ██████╔╝█████╗  ███████║█████╗█████╗██║   ██║   ██║    ╚████╔╝ 
