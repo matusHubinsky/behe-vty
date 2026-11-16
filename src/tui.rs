@@ -12,11 +12,13 @@
 // See the Licence for the specific language governing permissions and
 // limitations under the Licence.
 
-use cursive::event::{Event, EventResult, Key};
+use cursive::event::{Event, EventResult, Key, MouseButton, MouseEvent};
+use cursive::style::Effect;
 use cursive::theme::{Color, ColorStyle};
 use cursive::traits::*;
-use cursive::view::Margins;
-use cursive::views::{Dialog, EditView, LinearLayout, PaddedView, ResizedView, ScrollView, SelectView, TextView};
+use cursive::utils::markup::StyledString;
+use cursive::view::{Margins, ViewWrapper};
+use cursive::views::{Dialog, EditView, LinearLayout, NamedView, PaddedView, ResizedView, ScrollView, SelectView, TextView};
 use cursive::{Cursive, CursiveExt, Printer, Vec2};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
@@ -43,7 +45,9 @@ const LOGO: &str = "
 fn set_app_title(s: &mut Cursive, session: Option<&str>) {
     let title = match session {
         Some(desc) => {
-            format!("BEHE-VTY | {desc}")
+            // The title bar shows the session label (host:port, user@host):
+            // censor sensitive tokens there too.
+            format!("BEHE-VTY | {}", censor_sensitive(desc))
         }
         None => BASE_TITLE.to_string(),
     };
@@ -325,9 +329,583 @@ fn append_output(s: &mut Cursive, buffer: &OutputBuffer, text: &str) {
         out.display("")
     };
 
+    set_terminal_output(s, snapshot);
+}
+
+/// Copy the active mouse selection (scrollback first, then input line) to the
+/// clipboard. Returns false when there is no selection.
+fn copy_current_selection(s: &mut Cursive) -> bool {
+    let scroll = s
+        .call_on_name("terminal_scroll", |v: &mut ScrollMouse| v.selected_text())
+        .unwrap_or_default();
+    let input = s
+        .call_on_name("input", |v: &mut InputView| v.selected_text())
+        .unwrap_or_default();
+    let text = if !scroll.is_empty() { scroll } else { input };
+    if text.is_empty() {
+        false
+    } else {
+        copy_to_clipboard(&text);
+        true
+    }
+}
+
+/// Replace the scrollback content (censored + status-colored via
+/// `render_output`) and force the terminal view to the bottom, so every Enter
+/// and every shell/vty update lands on the newest line even if the user
+/// scrolled up before (a manual scroll resets the scroll strategy to
+/// `KeepRow`, so re-assert `StickToBottom` here on every update).
+fn set_terminal_output(s: &mut Cursive, snapshot: String) {
     s.call_on_name("terminal_output", |v: &mut TextView| {
-        v.set_content(snapshot);
+        v.set_content(render_output(&snapshot, None));
     });
+    // The named view wraps the ScrollView around the named TextView, so the
+    // type is ScrollMouse — with the wrong type the downcast silently fails
+    // and call_on_name returns None (no scrolling).
+    s.call_on_name("terminal_scroll", |v: &mut ScrollMouse| {
+        let _ = v.inner.set_scroll_strategy(cursive::view::ScrollStrategy::StickToBottom);
+        let _ = v.inner.scroll_to_bottom();
+        v.apply_selection();
+    });
+}
+
+// ---------------------------------------------------------------- clipboard
+
+/// RFC 4648 base64, for the OSC 52 clipboard escape (avoids a new dependency).
+fn base64_encode(data: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(data.len().div_ceil(3) * 4);
+    for chunk in data.chunks(3) {
+        let n = (chunk[0] as u32) << 16
+            | (*chunk.get(1).unwrap_or(&0) as u32) << 8
+            | (*chunk.get(2).unwrap_or(&0) as u32);
+        out.push(ALPHABET[(n >> 18) as usize & 0x3f] as char);
+        out.push(ALPHABET[(n >> 12) as usize & 0x3f] as char);
+        out.push(if chunk.len() > 1 { ALPHABET[(n >> 6) as usize & 0x3f] as char } else { '=' });
+        out.push(if chunk.len() > 2 { ALPHABET[n as usize & 0x3f] as char } else { '=' });
+    }
+    out
+}
+
+/// Copy text to the system clipboard with an OSC 52 escape sequence, which
+/// works in most terminal emulators (xterm, kitty, iTerm2, Windows Terminal,
+/// ...) without a clipboard library. Both the clipboard (`c`, for
+/// Ctrl+Shift+V) and the primary selection (`p`, for middle-click paste) are
+/// set. On unix the escape is written to /dev/tty — cursive's crossterm
+/// backend renders there, while stdout may be redirected elsewhere.
+fn copy_to_clipboard(text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    use std::io::Write;
+    let b64 = base64_encode(text.as_bytes());
+    let seq = format!("\x1b]52;c;{b64}\x07\x1b]52;p;{b64}\x07");
+    #[cfg(unix)]
+    {
+        if let Ok(mut tty) = std::fs::File::options().write(true).open("/dev/tty") {
+            let _ = tty.write_all(seq.as_bytes());
+            let _ = tty.flush();
+        }
+        // Best-effort fallback for terminals that ignore OSC 52 (VTE, tmux
+        // without set-clipboard): feed the X11/Wayland clipboard tools when
+        // they are installed. Check PATH first — spawning a missing binary
+        // still forks a child, and the resulting SIGCHLD can interrupt the
+        // session thread's blocking read (EINTR).
+        let path_dirs = std::env::var_os("PATH").unwrap_or_default();
+        let on_path = |prog: &str| {
+            std::env::split_paths(&path_dirs).any(|d| d.join(prog).is_file())
+        };
+        for (prog, args) in [
+            ("xclip", vec!["-selection", "clipboard"]),
+            ("xsel", vec!["--clipboard", "--input"]),
+            ("wl-copy", vec![]),
+        ] {
+            if !on_path(prog) {
+                continue;
+            }
+            if let Ok(mut child) = std::process::Command::new(prog)
+                .args(&args)
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                if let Some(mut stdin) = child.stdin.take() {
+                    let _ = stdin.write_all(text.as_bytes());
+                }
+                let _ = child.wait();
+            }
+        }
+    }
+    let mut out = std::io::stdout().lock();
+    let _ = out.write_all(seq.as_bytes());
+    let _ = out.flush();
+}
+
+// ------------------------------------------------------- scrollback selection
+
+/// Left-drag selection over the scrollback in content coordinates
+/// (x = column, y = row): (anchor, current). `None` = no active selection.
+type Selection = Option<(Vec2, Vec2)>;
+
+type TermScroll = ScrollView<NamedView<TextView>>;
+
+// ------------------------------------------------------- output censoring
+
+/// Replacement for sensitive tokens (login, IP, domain, port) in the output.
+const CENSOR: &str = "████";
+
+fn is_word_char(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_' || c == '-'
+}
+
+/// Length of an IPv4 address starting at `i`, or None. Requires a non-word
+/// boundary on both sides so version strings like "15.5.1.2.3" don't match.
+fn ipv4_len(chars: &[char], i: usize) -> Option<usize> {
+    if i > 0 && (is_word_char(chars[i - 1]) || chars[i - 1] == '.') {
+        return None;
+    }
+    let mut pos = i;
+    for octet in 0..4 {
+        let start = pos;
+        while pos < chars.len() && chars[pos].is_ascii_digit() && pos - start < 3 {
+            pos += 1;
+        }
+        if pos == start {
+            return None;
+        }
+        if octet < 3 {
+            if chars.get(pos) != Some(&'.') {
+                return None;
+            }
+            pos += 1;
+        }
+    }
+    if chars.get(pos).map(|c| is_word_char(*c) || *c == '.').unwrap_or(false) {
+        return None;
+    }
+    Some(pos - i)
+}
+
+/// Length of a domain name starting at `i` (labels separated by dots, the
+/// last label purely alphabetic and at least 2 chars, so "15.5" and "0/1.100"
+/// are not treated as domains), or None.
+fn domain_len(chars: &[char], i: usize) -> Option<usize> {
+    if i > 0 && (is_word_char(chars[i - 1]) || chars[i - 1] == '.') {
+        return None;
+    }
+    let mut pos = i;
+    let mut last_dot = None;
+    while pos < chars.len() && (is_word_char(chars[pos]) || chars[pos] == '.') {
+        if chars[pos] == '.' {
+            last_dot = Some(pos);
+        }
+        pos += 1;
+    }
+    // strip trailing dots
+    while pos > i && chars[pos - 1] == '.' {
+        pos -= 1;
+    }
+    let end = pos;
+    if chars.get(end).map(|c| is_word_char(*c) || *c == '.').unwrap_or(false) {
+        return None;
+    }
+    let Some(dot) = last_dot else { return None };
+    let tld = &chars[dot + 1..end];
+    if tld.len() >= 2 && tld.iter().all(|c| c.is_ascii_alphabetic()) && end > dot + 1 && dot > i {
+        Some(end - i)
+    } else {
+        None
+    }
+}
+
+/// Length of a login name (word chars) directly followed by '@', or None.
+fn login_len(chars: &[char], i: usize) -> Option<usize> {
+    if i > 0 && (is_word_char(chars[i - 1]) || chars[i - 1] == '@') {
+        return None;
+    }
+    let mut pos = i;
+    while pos < chars.len() && (is_word_char(chars[pos]) || chars[pos] == '.') {
+        pos += 1;
+    }
+    if pos > i && chars.get(pos) == Some(&'@') {
+        Some(pos - i)
+    } else {
+        None
+    }
+}
+
+/// Length of an IPv6 literal starting at `i` (a run of hex digits and ':',
+/// either compressed with "::" or full-form with exactly 8 groups of 1-4
+/// hex digits), or None. Boundaries exclude hex/':'/'.' so timestamps like
+/// "14:14:15" and MACs like "aa:bb:cc:dd:ee:ff" (6 groups) never match.
+fn ipv6_len(chars: &[char], i: usize) -> Option<usize> {
+    let hex = |c: char| c.is_ascii_hexdigit();
+    if i > 0 && (hex(chars[i - 1]) || chars[i - 1] == ':' || chars[i - 1] == '.') {
+        return None;
+    }
+    let mut pos = i;
+    let mut has_double_colon = false;
+    let mut groups = 1;
+    let mut cur = 0usize;
+    while pos < chars.len() && (hex(chars[pos]) || chars[pos] == ':') {
+        if chars[pos] == ':' {
+            if chars.get(pos + 1) == Some(&':') {
+                has_double_colon = true;
+                cur = 0;
+                pos += 2;
+                continue;
+            }
+            if cur == 0 || cur > 4 {
+                return None;
+            }
+            groups += 1;
+            cur = 0;
+        } else {
+            cur += 1;
+            if cur > 4 {
+                return None;
+            }
+        }
+        pos += 1;
+    }
+    if pos == i || !(has_double_colon || (groups == 8 && cur >= 1)) {
+        return None;
+    }
+    if chars.get(pos).map(|c| hex(*c) || *c == ':' || *c == '.').unwrap_or(false) {
+        return None;
+    }
+    Some(pos - i)
+}
+
+/// If `chars[i..]` continues with ":digits" (a port suffix), return the end.
+fn port_suffix_end(chars: &[char], i: usize) -> Option<usize> {
+    if chars.get(i) != Some(&':') {
+        return None;
+    }
+    let mut j = i + 1;
+    while j < chars.len() && chars[j].is_ascii_digit() {
+        j += 1;
+    }
+    (j > i + 1).then_some(j)
+}
+
+/// Byte index just after the ':' of a leading login prompt ("Username:",
+/// "Password:", "login as:", ...), or None when the line is not a prompt.
+/// Only a keyword at line start (optionally indented) counts, so banner text
+/// ("User Access Verification") and `show running-config` lines ("username
+/// admin secret ...", no colon) are left alone.
+fn login_prompt_colon_end(body: &str) -> Option<usize> {
+    let t = body.trim_start();
+    let lead = body.len() - t.len();
+    let lower = t.to_ascii_lowercase();
+    for kw in ["username", "login as", "login", "password", "passcode"] {
+        if let Some(rest) = lower.strip_prefix(kw) {
+            if rest.starts_with(':') {
+                return Some(lead + kw.len() + 1);
+            }
+        }
+    }
+    None
+}
+
+/// Replace sensitive tokens (IPv4/IPv6, host:port, domains, login@, a
+/// "port N" keyword, and the value typed after a login prompt) with a
+/// censorship block. Idempotent: blocks match nothing.
+fn censor_sensitive(text: &str) -> String {
+    let mut out = String::new();
+    for line in text.split_inclusive('\n') {
+        let body = line.strip_suffix('\n').unwrap_or(&line);
+        match login_prompt_colon_end(body) {
+            Some(end) => {
+                let (head, value) = body.split_at(end);
+                out.push_str(head);
+                let ws = &value[..value.len() - value.trim_start().len()];
+                if value.trim().is_empty() {
+                    out.push_str(value); // prompt awaiting input: nothing to hide
+                } else {
+                    out.push_str(ws);
+                    out.push_str(CENSOR);
+                }
+                if line.ends_with('\n') {
+                    out.push('\n');
+                }
+            }
+            None => out.push_str(&censor_scan(line)),
+        }
+    }
+    out
+}
+
+/// Char-scan censorship of one line: IPv4/IPv6, host:port, domains, login@,
+/// "port N".
+fn censor_scan(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if let Some(len) = ipv4_len(&chars, i) {
+            let end = port_suffix_end(&chars, i + len).unwrap_or(i + len);
+            out.push_str(CENSOR);
+            i = end;
+            continue;
+        }
+        if let Some(len) = ipv6_len(&chars, i) {
+            out.push_str(CENSOR);
+            i += len;
+            continue;
+        }
+        if let Some(len) = login_len(&chars, i) {
+            out.push_str(CENSOR);
+            out.push('@');
+            i += len + 1;
+            continue;
+        }
+        if let Some(len) = domain_len(&chars, i) {
+            let end = port_suffix_end(&chars, i + len).unwrap_or(i + len);
+            out.push_str(CENSOR);
+            i = end;
+            continue;
+        }
+        // "port 2323" as in telnet's "Trying 10.0.0.1, port 2323 ...".
+        if i + 4 <= chars.len()
+            && chars[i..i + 4].iter().map(|c| c.to_ascii_lowercase()).eq("port".chars())
+            && (i == 0 || !is_word_char(chars[i - 1]))
+            && !chars.get(i + 4).map(|c| is_word_char(*c)).unwrap_or(false)
+        {
+            let mut j = i + 4;
+            while j < chars.len() && (chars[j] == ' ' || chars[j] == '\t') {
+                j += 1;
+            }
+            let digits = j;
+            while j < chars.len() && chars[j].is_ascii_digit() {
+                j += 1;
+            }
+            if j > digits {
+                out.extend(chars[i..i + 4].iter());
+                out.extend(chars[i + 4..digits].iter());
+                out.push_str(CENSOR);
+                i = j;
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    out
+}
+
+// ------------------------------------------------------- status messages
+
+/// Cisco IOS syslog line: a "%FACILITY-SEVERITY-MNEMONIC:" token (facility and
+/// mnemonic start with an uppercase letter, severity is one digit 0-7, ':'
+/// after the mnemonic), optionally preceded by a timestamp or prompt, e.g.
+/// "*Nov  3 14:14:15.001: %LINK-3-UPDOWN: Interface ... changed state to down".
+fn is_status_line(line: &str) -> bool {
+    let chars: Vec<char> = line.chars().collect();
+    for i in 0..chars.len() {
+        if chars[i] != '%' {
+            continue;
+        }
+        // '%' glued to a word ("foo%SYS-5-...") is not a syslog token.
+        if i > 0 && chars[i - 1].is_ascii_alphanumeric() {
+            continue;
+        }
+        let mut p = i + 1;
+        // FACILITY: starts with an uppercase letter, then uppercase/digit/'_'.
+        if !chars.get(p).map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+            continue;
+        }
+        p += 1;
+        while p < chars.len() && (chars[p].is_ascii_uppercase() || chars[p].is_ascii_digit() || chars[p] == '_') {
+            p += 1;
+        }
+        if chars.get(p) != Some(&'-') {
+            continue;
+        }
+        p += 1;
+        // SEVERITY: exactly one digit 0-7.
+        match chars.get(p) {
+            Some(c) if c.is_ascii_digit() && *c <= '7' => p += 1,
+            _ => continue,
+        }
+        if chars.get(p) != Some(&'-') {
+            continue;
+        }
+        p += 1;
+        // MNEMONIC: starts with an uppercase letter, then uppercase/digit/'_'.
+        if !chars.get(p).map(|c| c.is_ascii_uppercase()).unwrap_or(false) {
+            continue;
+        }
+        p += 1;
+        while p < chars.len() && (chars[p].is_ascii_uppercase() || chars[p].is_ascii_digit() || chars[p] == '_') {
+            p += 1;
+        }
+        // Real messages have ':' right after the mnemonic (or the line ends).
+        match chars.get(p) {
+            None | Some(':') | Some('\n') | Some('\r') => return true,
+            _ => continue,
+        }
+    }
+    false
+}
+
+/// Build the scrollback content as styled spans: sensitive tokens censored,
+/// Cisco status lines in the theme highlight color, and the selected rows
+/// (whole lines from anchor to current row) in reverse video on top.
+fn render_output(src: &str, sel: Selection) -> StyledString {
+    use cursive::style::Style;
+    let mut out = StyledString::default();
+    let range = sel.map(|(a, c)| a.y.min(c.y)..=a.y.max(c.y));
+    for (i, line) in src.split_inclusive('\n').enumerate() {
+        let censored = censor_sensitive(line);
+        let mut style = Style::default();
+        if is_status_line(line) {
+            style = style.combine(ColorStyle::highlight());
+        }
+        if range.as_ref().map(|r| r.contains(&i)).unwrap_or(false) {
+            style = style.combine(Effect::Reverse);
+        }
+        out.append_styled(censored, style);
+    }
+    out
+}
+
+/// Wraps the terminal ScrollView with mouse support: left-drag highlights a
+/// range of the scrollback and copies it to the clipboard on release; the
+/// wheel still scrolls; any interaction leaves keyboard focus on the input
+/// line, so clicking the terminal window lets the user type immediately.
+struct ScrollMouse {
+    inner: TermScroll,
+    selection: Selection,
+}
+
+impl ScrollMouse {
+    fn new(inner: TermScroll) -> Self {
+        ScrollMouse {
+            inner,
+            selection: None,
+        }
+    }
+
+    /// Re-render the inner TextView with the active selection highlighted.
+    fn apply_selection(&mut self) {
+        let sel = self.selection;
+        let _ = ViewWrapper::with_view_mut(self.inner.get_inner_mut(), |tv: &mut TextView| {
+            let src = tv.get_content().source().to_string();
+            tv.set_content(render_output(&src, sel));
+        });
+    }
+
+    /// Text of the selected scrollback rows, for the clipboard copy on release.
+    fn selected_text(&self) -> String {
+        let Some((a, c)) = self.selection else {
+            return String::new();
+        };
+        let lo = a.y.min(c.y);
+        let hi = a.y.max(c.y);
+        let src = ViewWrapper::with_view(self.inner.get_inner(), |tv: &TextView| {
+            tv.get_content().source().to_string()
+        })
+        .unwrap_or_default();
+        src.split_inclusive('\n')
+            .enumerate()
+            .filter(|(i, _)| (lo..=hi).contains(i))
+            .map(|(_, l)| l)
+            .collect()
+    }
+
+    fn refresh_selection(&self) -> EventResult {
+        EventResult::with_cb(|s| {
+            s.call_on_name("terminal_scroll", |v: &mut ScrollMouse| v.apply_selection());
+        })
+    }
+}
+
+impl ViewWrapper for ScrollMouse {
+    type V = TermScroll;
+
+    fn with_view<F, R>(&self, f: F) -> Option<R>
+    where
+        F: FnOnce(&Self::V) -> R,
+    {
+        Some(f(&self.inner))
+    }
+
+    fn with_view_mut<F, R>(&mut self, f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Self::V) -> R,
+    {
+        Some(f(&mut self.inner))
+    }
+
+    fn wrap_take_focus(
+        &mut self,
+        _source: cursive::direction::Direction,
+    ) -> Result<EventResult, cursive::view::CannotFocus> {
+        // Always take focus: clicks on the scrollback must reach this wrapper
+        // even when the content does not overflow the viewport, where the
+        // inner ScrollView would refuse focus (is_scrolling() == false) and
+        // the click would be dispatched to the input line instead.
+        Ok(EventResult::consumed())
+    }
+
+    fn wrap_on_event(&mut self, event: Event) -> EventResult {
+        if let Event::Mouse {
+            event: me,
+            position,
+            offset,
+        } = event
+        {
+            match me {
+                MouseEvent::Press(MouseButton::Left) => {
+                    let local = Vec2::new(
+                        position.x.saturating_sub(offset.x),
+                        position.y.saturating_sub(offset.y),
+                    );
+                    let tl = self.inner.content_viewport().top_left();
+                    let p = Vec2::new(tl.x + local.x, tl.y + local.y);
+                    self.selection = Some((p, p));
+                    return self.refresh_selection();
+                }
+                MouseEvent::Hold(MouseButton::Left) => {
+                    if let Some((anchor, _)) = self.selection {
+                        let local = Vec2::new(
+                            position.x.saturating_sub(offset.x),
+                            position.y.saturating_sub(offset.y),
+                        );
+                        let tl = self.inner.content_viewport().top_left();
+                        let p = Vec2::new(tl.x + local.x, tl.y + local.y);
+                        self.selection = Some((anchor, p));
+                        return self.refresh_selection();
+                    }
+                }
+                MouseEvent::Release(MouseButton::Left) => {
+                    // Copy only a real drag; a plain click just clears the selection.
+                    match self.selection {
+                        Some((a, c)) if a != c => copy_to_clipboard(&self.selected_text()),
+                        Some(_) => self.selection = None,
+                        None => {}
+                    }
+                    // A click on the terminal window must leave the keyboard on
+                    // the input line, so the user can type right away.
+                    return EventResult::with_cb(|s| {
+                        let _ = s.focus_name("input");
+                    })
+                    .and(self.refresh_selection());
+                }
+                MouseEvent::WheelUp | MouseEvent::WheelDown => {
+                    // Let the ScrollView scroll, then put focus back on the input.
+                    let r = self.inner.on_event(event);
+                    return r.and(EventResult::with_cb(|s| {
+                        let _ = s.focus_name("input");
+                    }));
+                }
+                _ => {}
+            }
+        }
+        self.inner.on_event(event)
+    }
 }
 
 // ---------------------------------------------------------------- input view
@@ -337,6 +915,7 @@ fn append_output(s: &mut Cursive, buffer: &OutputBuffer, text: &str) {
 struct InputView {
     content: String,
     cursor: usize, // byte index, always on a char boundary
+    sel_anchor: Option<usize>, // left-drag selection start (byte index) in the input line
     ghost: String,
     ghost_command: String, // full command the ghost is a tail of
     multiline: bool, // Ctrl+V / pasted newline: Enter inserts a line, Ctrl+Z sends the block
@@ -368,6 +947,7 @@ impl InputView {
         Self {
             content: String::new(),
             cursor: 0,
+            sel_anchor: None,
             ghost: String::new(),
             ghost_command: String::new(),
             multiline: false,
@@ -388,6 +968,36 @@ impl InputView {
         self.cursor = text.len();
         self.content = text;
         self.update_ghost();
+    }
+
+    /// Currently mouse-selected text in the input line ("" when none).
+    fn selected_text(&self) -> String {
+        match self.sel_anchor {
+            Some(a) if a != self.cursor => {
+                let (lo, hi) = if a < self.cursor { (a, self.cursor) } else { (self.cursor, a) };
+                self.content[lo..hi].to_string()
+            }
+            _ => String::new(),
+        }
+    }
+
+    /// Byte index of the character at (row, col) in the input buffer.
+    fn byte_at(&self, row: usize, col: usize) -> usize {
+        let mut start = 0;
+        for (i, line) in self.content.split('\n').enumerate() {
+            if i == row {
+                let mut byte = start;
+                for (ci, ch) in line.char_indices() {
+                    if ci >= col {
+                        break;
+                    }
+                    byte = start + ci + ch.len_utf8();
+                }
+                return byte.min(self.content.len());
+            }
+            start += line.len() + 1;
+        }
+        self.content.len()
     }
 
     fn matches(&self) -> Vec<String> {
@@ -725,8 +1335,17 @@ impl View for InputView {
         let row_offset = cursor_row.saturating_sub(height.saturating_sub(1));
         let width = printer.size.x.saturating_sub(1).max(1);
 
+        // Active mouse selection in the input line, as a byte range.
+        let sel = match self.sel_anchor {
+            Some(a) if a != self.cursor => Some((a.min(self.cursor), a.max(self.cursor))),
+            _ => None,
+        };
+        let sel_style = ColorStyle::new(sc.input_bg, sc.fg); // swapped = highlight
+
+        let mut row_byte = 0; // byte index of the current row's first char
         for (row, line) in lines.iter().enumerate() {
             if row < row_offset {
+                row_byte += line.len() + 1;
                 continue;
             }
             let y = row - row_offset;
@@ -742,8 +1361,29 @@ impl View for InputView {
                 0
             };
 
-            let visible: String = chars.iter().skip(col_offset).take(width).collect();
-            printer.with_color(normal, |p| p.print((0, y), &visible));
+            // Print the visible part, highlighting the selected byte range.
+            let skip_bytes: usize = chars.iter().take(col_offset).map(|c| c.len_utf8()).sum();
+            let mut x = 0usize;
+            let mut run = String::new();
+            let mut run_sel = false;
+            let mut byte = row_byte + skip_bytes;
+            for ch in chars.iter().skip(col_offset).take(width) {
+                let is_sel = sel.map(|(lo, hi)| byte >= lo && byte < hi).unwrap_or(false);
+                if is_sel != run_sel && !run.is_empty() {
+                    let style = if run_sel { sel_style } else { normal };
+                    printer.with_color(style, |p| p.print((x, y), &run));
+                    x += run.chars().count();
+                    run.clear();
+                }
+                run_sel = is_sel;
+                run.push(*ch);
+                byte += ch.len_utf8();
+            }
+            if !run.is_empty() {
+                let style = if run_sel { sel_style } else { normal };
+                printer.with_color(style, |p| p.print((x, y), &run));
+            }
+            row_byte += line.len() + 1;
 
             // Ghost text right after the typed text (single-line mode only).
             if row == cursor_row && !self.ghost.is_empty() {
@@ -795,7 +1435,71 @@ impl View for InputView {
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
+        // Any keyboard edit ends an input-line mouse selection.
+        if !matches!(event, Event::Mouse { .. }) {
+            self.sel_anchor = None;
+        }
         match event {
+            Event::Mouse {
+                event: MouseEvent::Press(MouseButton::Left),
+                position,
+                offset,
+            } => {
+                let local = Vec2::new(
+                    position.x.saturating_sub(offset.x),
+                    position.y.saturating_sub(offset.y),
+                );
+                self.cursor = self.byte_at(local.y, local.x);
+                self.sel_anchor = Some(self.cursor);
+                self.update_ghost();
+                EventResult::consumed()
+            }
+
+            Event::Mouse {
+                event: MouseEvent::Hold(MouseButton::Left),
+                position,
+                offset,
+            } => {
+                if self.sel_anchor.is_some() {
+                    let local = Vec2::new(
+                        position.x.saturating_sub(offset.x),
+                        position.y.saturating_sub(offset.y),
+                    );
+                    self.cursor = self.byte_at(local.y, local.x);
+                    self.update_ghost();
+                }
+                EventResult::consumed()
+            }
+
+            Event::Mouse {
+                event: MouseEvent::Release(MouseButton::Left),
+                ..
+            } => {
+                if let Some(a) = self.sel_anchor {
+                    if a != self.cursor {
+                        let (lo, hi) = if a < self.cursor { (a, self.cursor) } else { (self.cursor, a) };
+                        copy_to_clipboard(&self.content[lo..hi]);
+                    }
+                }
+                EventResult::consumed()
+            }
+
+            Event::Mouse {
+                event: me @ (MouseEvent::WheelUp | MouseEvent::WheelDown),
+                ..
+            } => {
+                // The input line has focus: forward wheel scrolling to the scrollback.
+                EventResult::with_cb(move |s| {
+                    s.call_on_name("terminal_scroll", |v: &mut ScrollMouse| {
+                        let _ = v.inner.on_event(Event::Mouse {
+                            event: me,
+                            position: Vec2::zero(),
+                            offset: Vec2::zero(),
+                        });
+                    });
+                })
+            }
+
             Event::Char('\n') => {
                 // Pasted newline: switch to multi-line input.
                 self.multiline = true;
@@ -1043,7 +1747,14 @@ fn connection_dialog(
 
     let mut sessions = SelectView::<Device>::new();
     for d in saved {
-        sessions.add_item(format!("{:<14} {}:{}", d.name, d.host, d.port), d);
+        // Saved sessions are grouped by host:port (the auto-saved name already
+        // is "host:port"); legacy rows named after the bare host still show it.
+        let label = if d.name == d.host {
+            format!("{}:{}", d.host, d.port)
+        } else {
+            d.name.clone()
+        };
+        sessions.add_item(format!("{:<22} [{}]", label, d.protocol), d);
     }
     // Picking a saved session loads it into the form (like PuTTY); the form
     // fields are then the single source of truth for the "Open" button.
@@ -1225,7 +1936,13 @@ fn open_connection(
         .unwrap_or(Vendor::Cisco);
 
     let port = port_txt.parse().unwrap_or(proto.default_port());
-    let name = if host.is_empty() { "adhoc".to_string() } else { host.clone() };
+    // Key the saved session by host:port, not just the hostname, so the same
+    // host on ssh (22) and telnet (23) stays two separate saved sessions.
+    let name = if host.is_empty() {
+        "adhoc".to_string()
+    } else {
+        format!("{host}:{port}")
+    };
 
     let endpoint = match proto {
         networking::Protocol::Serial => networking::Endpoint::Serial {
@@ -1375,9 +2092,7 @@ fn send_output_refresh(
                 // Show the device's pending line (bare prompt) in the scrollback too.
                 out.display(&line)
             };
-            s.call_on_name("terminal_output", |v: &mut TextView| {
-                v.set_content(snapshot);
-            });
+            set_terminal_output(s, snapshot);
         } else if !line.is_empty() {
             // Only the pending line changed (bare prompt): re-render so the
             // scrollback shows it even before the first Enter.
@@ -1385,9 +2100,7 @@ fn send_output_refresh(
                 let out = output_buffer.lock().unwrap();
                 out.display(&line)
             };
-            s.call_on_name("terminal_output", |v: &mut TextView| {
-                v.set_content(snapshot);
-            });
+            set_terminal_output(s, snapshot);
         }
         // Keep the input-line prompt on the device's current line, even when
         // only a bare prompt (no newline) arrived in this chunk.
@@ -1467,6 +2180,19 @@ fn make_notifier(
 pub fn run() {
     let mut siv = Cursive::default();
 
+    // Replace the default Ctrl+C -> quit: with an active selection, Ctrl+C /
+    // Ctrl+Shift+C (terminals deliver both as 0x03 = CtrlChar('c')) copies the
+    // selection instead of closing the window; without a selection it quits
+    // as before.
+    siv.clear_all_global_callbacks();
+    siv.set_on_pre_event(Event::WindowResize, |s| s.clear());
+    siv.set_on_pre_event(Event::Exit, |s| s.quit());
+    siv.set_on_pre_event(Event::CtrlChar('c'), |s| {
+        if !copy_current_selection(s) {
+            s.quit();
+        }
+    });
+
     let database = Arc::new(Mutex::new(Database::open().expect("cannot open database")));
     let commands = Arc::new(RwLock::new(CommandTree::load(Vendor::Cisco)));
     let device = Arc::new(Mutex::new("local".to_string()));
@@ -1504,8 +2230,10 @@ pub fn run() {
         .style(ColorStyle::new(initial.fg, initial.bg))
         .with_name("terminal_output");
 
-    let terminal_output =
-        ScrollView::new(text_view).scroll_strategy(cursive::view::ScrollStrategy::StickToBottom);
+    let terminal_output = ScrollMouse::new(
+        ScrollView::new(text_view).scroll_strategy(cursive::view::ScrollStrategy::StickToBottom),
+    )
+    .with_name("terminal_scroll");
 
     let input_view = InputView::new(
         Arc::clone(&terminal),
@@ -1594,6 +2322,14 @@ pub fn run() {
         });
     }
 
+    // Any mouse event no widget consumed (click on the terminal window, dialog
+    // padding, ...) puts keyboard focus back on the input line, so clicking the
+    // window lets the user type immediately. Clicks on widgets are consumed by
+    // the widget and never reach this callback.
+    siv.set_on_post_event(cursive::event::EventTrigger::mouse(), |s| {
+        let _ = s.focus_name("input");
+    });
+
     siv.set_fps(CURSOR_FPS);
     siv.run();
 }
@@ -1632,4 +2368,348 @@ mod tests {
         push_line(&mut rich, "router#show ver\n");
         assert_eq!(rich, "router# show ver\n");
     }
+
+    struct FixedBackend {
+        size: Vec2,
+    }
+
+    impl cursive::backend::Backend for FixedBackend {
+        fn poll_event(&mut self) -> Option<Event> {
+            None
+        }
+        fn set_title(&mut self, _title: String) {}
+        fn refresh(&mut self) {}
+        fn has_colors(&self) -> bool {
+            false
+        }
+        fn screen_size(&self) -> Vec2 {
+            self.size
+        }
+        fn move_to(&self, _pos: Vec2) {}
+        fn print(&self, _text: &str) {}
+        fn clear(&self, _color: Color) {}
+        fn set_color(&self, colors: cursive::theme::ColorPair) -> cursive::theme::ColorPair {
+            colors
+        }
+        fn set_effect(&self, _effect: cursive::theme::Effect) {}
+        fn unset_effect(&self, _effect: cursive::theme::Effect) {}
+    }
+
+    fn is_at_bottom(s: &mut Cursive) -> Option<bool> {
+        s.call_on_name("terminal_scroll", |v: &mut ScrollMouse| v.inner.is_at_bottom())
+    }
+
+    /// Builds the same view tree as `run()` (scrollback over a 1-row input
+    /// line inside a padded dialog) on a fixed-size backend.
+    fn test_runner() -> cursive::CursiveRunner<&'static mut Cursive> {
+        let siv = Box::leak(Box::new(Cursive::new()));
+        let text_view = TextView::new("").with_name("terminal_output");
+        let scroll = ScrollMouse::new(
+            ScrollView::new(text_view).scroll_strategy(cursive::view::ScrollStrategy::StickToBottom),
+        )
+        .with_name("terminal_scroll");
+        let layout = LinearLayout::vertical()
+            .child(ResizedView::with_full_height(scroll))
+            .child(EditView::new().with_name("input").full_width());
+        siv.add_layer(
+            Dialog::around(ResizedView::with_full_screen(layout)).padding(Margins::lrtb(1, 1, 1, 1)),
+        );
+        let mut runner = siv.runner(Box::new(FixedBackend {
+            size: Vec2::new(80, 24),
+        }));
+        runner.refresh();
+        runner
+    }
+
+    #[test]
+    fn set_terminal_output_snaps_to_bottom_after_enter_and_after_scroll_up() {
+        let mut runner = test_runner();
+        let lines = |n: usize| (0..n).map(|i| format!("line {i}\n")).collect::<String>();
+
+        // Enter appends output taller than the viewport: must land at the bottom.
+        set_terminal_output(&mut runner, lines(40));
+        runner.refresh();
+        assert_eq!(
+            is_at_bottom(&mut runner),
+            Some(true),
+            "terminal_scroll must be found and at the bottom"
+        );
+
+        // User scrolls up: a manual scroll resets the strategy to KeepRow.
+        runner.call_on_name("terminal_scroll", |v: &mut ScrollMouse| {
+            let _ = v.inner.set_scroll_strategy(cursive::view::ScrollStrategy::KeepRow);
+            let _ = v.inner.set_offset(Vec2::new(0, 0));
+        });
+        runner.refresh();
+        assert_eq!(is_at_bottom(&mut runner), Some(false), "scrolled-up viewport should not be at the bottom");
+
+        // Next Enter/output must snap back to the bottom instead of staying stuck.
+        set_terminal_output(&mut runner, lines(80));
+        runner.refresh();
+        assert_eq!(is_at_bottom(&mut runner), Some(true), "viewport must return to the bottom on new output");
+    }
+
+    #[test]
+    fn base64_encode_matches_rfc4648() {
+        assert_eq!(base64_encode(b""), "");
+        assert_eq!(base64_encode(b"f"), "Zg==");
+        assert_eq!(base64_encode(b"fo"), "Zm8=");
+        assert_eq!(base64_encode(b"foo"), "Zm9v");
+        assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
+        assert_eq!(base64_encode(b"fooba"), "Zm9vYmE=");
+        assert_eq!(base64_encode(b"foobar"), "Zm9vYmFy");
+    }
+
+    #[test]
+    fn render_output_marks_only_selected_rows() {
+        let src = "line 0\nline 1\nline 2\nline 3\n";
+        let styled = render_output(src, Some((Vec2::new(0, 1), Vec2::new(0, 2))));
+        assert_eq!(styled.source(), src);
+        use cursive::style::EffectStatus;
+        let spans: Vec<_> = styled.spans().collect();
+        assert_eq!(spans.len(), 4);
+        let rev = |s: &cursive::utils::span::Span<'_, cursive::style::Style>| {
+            s.attr.effects.statuses[Effect::Reverse] != EffectStatus::InheritParent
+        };
+        assert!(!rev(&spans[0]));
+        assert!(rev(&spans[1]));
+        assert!(rev(&spans[2]));
+        assert!(!rev(&spans[3]));
+        // No selection -> all plain.
+        let plain = render_output(src, None);
+        assert!(plain.spans().all(|s| !rev(&s)));
+    }
+
+    #[test]
+    fn censor_sensitive_replaces_login_ip_domain_port() {
+        assert_eq!(censor_sensitive("ping 10.0.0.1"), format!("ping {CENSOR}"));
+        assert_eq!(censor_sensitive("telnet 10.0.0.1:2323"), format!("telnet {CENSOR}"));
+        assert_eq!(censor_sensitive("ssh admin@10.0.0.1"), format!("ssh {CENSOR}@{CENSOR}"));
+        assert_eq!(censor_sensitive("ping core-rtr.example.com"), format!("ping {CENSOR}"));
+        assert_eq!(censor_sensitive("connect gw.example.com:22"), format!("connect {CENSOR}"));
+        // Not sensitive: commands, prompts, versions, times, interfaces.
+        assert_eq!(censor_sensitive("router# show version"), "router# show version");
+        assert_eq!(censor_sensitive("Cisco IOS 15.5.1"), "Cisco IOS 15.5.1");
+        assert_eq!(censor_sensitive("* Nov  3 14:14:14.123: x"), "* Nov  3 14:14:14.123: x");
+        assert_eq!(censor_sensitive("interface GigabitEthernet0/1.100"), "interface GigabitEthernet0/1.100");
+        // Idempotent: censoring twice changes nothing.
+        let once = censor_sensitive("ping 10.0.0.1 from user@host.io:22");
+        assert_eq!(censor_sensitive(&once), once);
+    }
+
+    #[test]
+    fn censor_sensitive_handles_ipv6_and_port_keyword() {
+        // Compressed IPv6 literals are IPs too.
+        assert_eq!(censor_sensitive("ping 2001:db8::1"), format!("ping {CENSOR}"));
+        assert_eq!(censor_sensitive("ssh admin@fe80::1"), format!("ssh {CENSOR}@{CENSOR}"));
+        // "port N" as in telnet's "Trying 10.0.0.1, port 2323 ...".
+        assert_eq!(censor_sensitive("telnet 10.0.0.1, port 2323 ..."), format!("telnet {CENSOR}, port {CENSOR} ..."));
+        assert_eq!(censor_sensitive("connect gw.example.com, port 22"), format!("connect {CENSOR}, port {CENSOR}"));
+        // Timestamps, MACs and words containing "port" stay untouched.
+        assert_eq!(censor_sensitive("*Nov  3 14:14:15.001: %LINK-3-UPDOWN: x"), "*Nov  3 14:14:15.001: %LINK-3-UPDOWN: x");
+        assert_eq!(censor_sensitive("mac-address aa:bb:cc:dd:ee:ff"), "mac-address aa:bb:cc:dd:ee:ff");
+        assert_eq!(censor_sensitive("ip transport 22"), "ip transport 22");
+        // Idempotent.
+        let once = censor_sensitive("ping 2001:db8::1 via port 22");
+        assert_eq!(censor_sensitive(&once), once);
+    }
+
+    #[test]
+    fn censor_sensitive_handles_full_form_ipv6() {
+        // Uncompressed IPv6 (8 groups of 1-4 hex digits, no "::") is an IP too.
+        assert_eq!(
+            censor_sensitive("ping 2001:0db8:85a3:0000:0000:8a2e:0370:7334"),
+            format!("ping {CENSOR}")
+        );
+        assert_eq!(
+            censor_sensitive("ssh admin@2001:0DB8:0000:0000:0000:0000:0000:0001"),
+            format!("ssh {CENSOR}@{CENSOR}")
+        );
+        assert_eq!(censor_sensitive("ipv6 address 0:0:0:0:0:0:0:1/128"), format!("ipv6 address {CENSOR}/128"));
+        // Still not IPs: MACs have 6 groups, syslog timestamps have 3.
+        assert_eq!(censor_sensitive("mac aa:bb:cc:dd:ee:ff"), "mac aa:bb:cc:dd:ee:ff");
+        assert_eq!(
+            censor_sensitive("*Nov  3 14:14:15.001: %LINK-3-UPDOWN: x"),
+            "*Nov  3 14:14:15.001: %LINK-3-UPDOWN: x"
+        );
+        // Idempotent.
+        let once = censor_sensitive("ping 2001:0db8:85a3:0000:0000:8a2e:0370:7334");
+        assert_eq!(censor_sensitive(&once), once);
+    }
+
+    #[test]
+    fn censor_sensitive_censors_login_prompt_values() {
+        // Real telnet/ssh login flow: the typed login/password after the prompt.
+        assert_eq!(censor_sensitive("Username: admin\n"), format!("Username: {CENSOR}\n"));
+        assert_eq!(censor_sensitive("Password: hunter2"), format!("Password: {CENSOR}"));
+        assert_eq!(censor_sensitive("login: admin"), format!("login: {CENSOR}"));
+        assert_eq!(censor_sensitive("Login as: admin"), format!("Login as: {CENSOR}"));
+        assert_eq!(censor_sensitive("USERNAME: Admin"), format!("USERNAME: {CENSOR}"));
+        // A prompt with no value typed yet stays untouched.
+        assert_eq!(censor_sensitive("Password: "), "Password: ");
+        assert_eq!(censor_sensitive("Username:"), "Username:");
+        // Banner text and `show running-config` lines that merely start with
+        // a keyword (no colon) are not login prompts.
+        assert_eq!(censor_sensitive("User Access Verification"), "User Access Verification");
+        assert_eq!(
+            censor_sensitive("username admin privilege 15 secret 5 $1$xyz"),
+            "username admin privilege 15 secret 5 $1$xyz"
+        );
+        // Multi-line banner + prompt: only the prompt line is censored.
+        assert_eq!(
+            censor_sensitive("User Access Verification\n\nUsername: admin\nPassword: x\n"),
+            format!("User Access Verification\n\nUsername: {CENSOR}\nPassword: {CENSOR}\n")
+        );
+        // Idempotent.
+        let once = censor_sensitive("Username: admin\nPassword: hunter2\n");
+        assert_eq!(censor_sensitive(&once), once);
+    }
+
+    #[test]
+    fn render_output_censors_login_prompt_and_colors_status_line() {
+        let src = "Username: admin\n%LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down\n";
+        let styled = render_output(src, None);
+        assert_eq!(
+            styled.source(),
+            format!("Username: {CENSOR}\n%LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down\n")
+        );
+        let spans: Vec<_> = styled.spans().collect();
+        assert_eq!(spans.len(), 2);
+        let highlighted = |s: &cursive::utils::span::Span<'_, cursive::style::Style>| {
+            s.attr.color != cursive::style::ColorStyle::inherit_parent()
+        };
+        assert!(!highlighted(&spans[0]));
+        assert!(highlighted(&spans[1]));
+    }
+
+    #[test]
+    fn status_lines_detected_and_colored() {
+        assert!(is_status_line("* Nov  3 14:14:14.123: %LINEPROTO-5-UPDOWN: Line protocol changed"));
+        assert!(is_status_line("%SYS-5-CONFIG_I: Configured from console"));
+        assert!(is_status_line("router# %LINK-3-UPDOWN: Interface Ethernet0"));
+        // The interface up/down example: state change messages.
+        assert!(is_status_line("*Nov  3 14:14:15.001: %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down"));
+        assert!(is_status_line("%LINK-5-CHANGED: Interface GigabitEthernet0/1, changed state to up"));
+        assert!(is_status_line("%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan1, changed state to up"));
+        assert!(!is_status_line("router# show version"));
+        assert!(!is_status_line("Cisco IOS 15.5"));
+        assert!(!is_status_line("some output for: show version"));
+        assert!(!is_status_line("% No matching commands"));
+        assert!(!is_status_line("100% done"));
+
+        // Status line gets the highlight color; a normal line does not.
+        let src = "router# show ver\n%SYS-5-CONFIG_I: done\n";
+        let styled = render_output(src, None);
+        assert_eq!(styled.source(), src);
+        let spans: Vec<_> = styled.spans().collect();
+        assert_eq!(spans.len(), 2);
+        let highlighted = |s: &cursive::utils::span::Span<'_, cursive::style::Style>| {
+            s.attr.color != cursive::style::ColorStyle::inherit_parent()
+        };
+        assert!(!highlighted(&spans[0]));
+        assert!(highlighted(&spans[1]));
+        // Censoring applies in the same pass.
+        let censored = render_output("ping 10.0.0.1\n", None);
+        assert_eq!(censored.source(), format!("ping {CENSOR}\n"));
+    }
+
+    #[test]
+    fn status_lines_real_world_cisco_syslog() {
+        // Interface state changes (the requested case) plus other common IOS lines.
+        assert!(is_status_line("%LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down"));
+        assert!(is_status_line("%LINEPROTO-5-UPDOWN: Line protocol on Interface Vlan1, changed state to up"));
+        assert!(is_status_line("%LINK-5-CHANGED: Interface GigabitEthernet0/1, changed state to administratively down"));
+        assert!(is_status_line("*Nov  3 14:14:15.001: %LINK-3-UPDOWN: Interface GigabitEthernet0/1, changed state to down"));
+        assert!(is_status_line("%SYS-5-CONFIG_I: Configured from console by admin on vty0"));
+        assert!(is_status_line("%SYS-5-RELOAD: Reload requested by admin"));
+        assert!(is_status_line("%DUAL-5-NBRCHANGE: IP-EIGRP 1: Neighbor 10.1.1.1 (Serial0/0) is down"));
+        assert!(is_status_line("%OSPF-5-ADJCHG: Process 1, Nbr 10.2.2.2 on GigabitEthernet0/0 from LOADING to FULL, Loading Done"));
+        assert!(is_status_line("%BGP-5-ADJCHANGE: neighbor 10.3.3.3 Down BGP Notification sent"));
+        assert!(is_status_line("%SEC-6-IPACCESSLOGS: list 10 denied 10.4.4.4 1 packet"));
+        // Prompt glued directly to the message ('#' is a valid boundary).
+        assert!(is_status_line("router#%LINK-3-UPDOWN: Interface Ethernet0, changed state to up"));
+        // Severity boundaries 0 (emergencies) and 7 (debugging) are valid.
+        assert!(is_status_line("%SYS-0-SHUTDOWN: The system is being shut down"));
+        assert!(is_status_line("%LINK-7-UPDOWN: Interface Ethernet0 debug trace"));
+    }
+
+    #[test]
+    fn status_lines_reject_non_syslog_percent() {
+        // Severity is a single digit 0-7; 8+ does not exist in IOS.
+        assert!(!is_status_line("%LINK-8-UPDOWN: Interface Ethernet0"));
+        // '%' glued to a word is not a syslog token.
+        assert!(!is_status_line("foo%LINK-3-UPDOWN: Interface Ethernet0"));
+        // Facility and mnemonic must start with a letter.
+        assert!(!is_status_line("%3-4-5: not a facility"));
+        assert!(!is_status_line("%LINK-3-5UP: not a mnemonic"));
+        // IOS error/help text is not a status line.
+        assert!(!is_status_line("% No matching commands"));
+        assert!(!is_status_line("% Invalid input detected at '^' marker"));
+        assert!(!is_status_line("% Ambiguous command: \"show\""));
+        assert!(!is_status_line("100% done"));
+        assert!(!is_status_line("router# show version"));
+    }
+
+    #[test]
+    fn render_output_colors_status_and_censors_ip_in_one_line() {
+        let src = "%DUAL-5-NBRCHANGE: IP-EIGRP 1: Neighbor 10.1.1.1 (Serial0/0) is down\n";
+        let styled = render_output(src, None);
+        assert!(!styled.source().contains("10.1.1.1"));
+        assert!(styled.source().contains(CENSOR));
+        let spans: Vec<_> = styled.spans().collect();
+        assert_eq!(spans.len(), 1);
+        assert!(spans[0].attr.color != cursive::style::ColorStyle::inherit_parent());
+    }
+
+    #[test]
+    fn mouse_drag_selects_scrollback_rows() {
+        let mut runner = test_runner();
+        let lines = |n: usize| (0..n).map(|i| format!("line {i}\n")).collect::<String>();
+        set_terminal_output(&mut runner, lines(40));
+        runner.refresh();
+        // Press in the middle of the output area, drag down 3 rows, release.
+        runner.on_event(Event::Mouse {
+            event: MouseEvent::Press(MouseButton::Left),
+            position: Vec2::new(40, 10),
+            offset: Vec2::zero(),
+        });
+        runner.on_event(Event::Mouse {
+            event: MouseEvent::Hold(MouseButton::Left),
+            position: Vec2::new(40, 13),
+            offset: Vec2::zero(),
+        });
+        runner.on_event(Event::Mouse {
+            event: MouseEvent::Release(MouseButton::Left),
+            position: Vec2::new(40, 13),
+            offset: Vec2::zero(),
+        });
+
+        let (sel, text) = runner
+            .call_on_name("terminal_scroll", |v: &mut ScrollMouse| {
+                (v.selection, v.selected_text())
+            })
+            .unwrap();
+        let (a, c) = sel.expect("drag must leave an active selection");
+        assert_eq!(c.y - a.y, 3, "drag must span 3 rows, got {a:?}..{c:?}");
+        let expected: String = (a.y..=c.y).map(|i| format!("line {i}\n")).collect();
+        assert_eq!(text, expected);
+
+        // A plain click (press + release at the same spot) clears the selection
+        // instead of copying a single row.
+        runner.on_event(Event::Mouse {
+            event: MouseEvent::Press(MouseButton::Left),
+            position: Vec2::new(40, 10),
+            offset: Vec2::zero(),
+        });
+        runner.on_event(Event::Mouse {
+            event: MouseEvent::Release(MouseButton::Left),
+            position: Vec2::new(40, 10),
+            offset: Vec2::zero(),
+        });
+        let sel = runner
+            .call_on_name("terminal_scroll", |v: &mut ScrollMouse| v.selection)
+            .unwrap();
+        assert_eq!(sel, None, "plain click must clear the selection");
+    }
 }
+
