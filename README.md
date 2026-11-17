@@ -16,9 +16,6 @@ This is a Rust terminal wrapper that provides the typo-free autocomplete into th
 [![downloads](https://img.shields.io/github/downloads/atush-eu/behe-vty/total)](https://github.com/atush-eu/behe-vty/releases)
 [![license](https://img.shields.io/github/license/atush-eu/behe-vty)](LICENSE.md)
 
-Cisco `%LINK-*-CHANGED` messaged are ignored and will never appear at the terminal input.
-TODO: terminal will accept list of commands and enters them into Cisco IOS in batches to be excecuted one by one, each line ends with CTLN+Z.
-
 ![alt text](assets/image-001.png)
 
 ## About 
