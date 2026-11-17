@@ -7,7 +7,7 @@
 ╚═════╝ ╚══════╝╚═╝  ╚═╝╚══════╝      ╚═══╝     ╚═╝      ╚═╝  
 ```
 
-This is a Rust terminal wrapper that provides the typo-free autocomplete into the Cisco / Juniper / Mikrotik consoles. Works with Telnet, SSH or Console cable. 
+This is a Rust terminal wrapper that provides the typo-free autocomplete into the Cisco / Juniper / Mikrotik consoles. Works with Telnet, SSH or Console cable (Serial). 
 
 [![CI](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml/badge.svg)](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml)
 [![tests](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml)
