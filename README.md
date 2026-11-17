@@ -12,9 +12,9 @@ This is a Rust terminal wrapper that provides the typo-free autocomplete into th
 [![CI](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml/badge.svg)](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml)
 [![tests](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/matusHubinsky/behe-vty/actions/workflows/rust.yml)
 [![release](https://github.com/matusHubinsky/behe-vty/actions/workflows/release.yaml/badge.svg)](https://github.com/matusHubinsky/behe-vty/actions/workflows/release.yaml)
-[![stars](https://img.shields.io/github/stars/matusHubinsky/behe-vty/)](https://github.com/matusHubinsky/behe-vty/stargazers)
-[![downloads](https://img.shields.io/github/downloads/matusHubinsky/behe-vty//total)](https://github.com/matusHubinsky/behe-vty/releases)
-[![license](https://img.shields.io/github/license/matusHubinsky/behe-vty/)](LICENSE.md)
+[![stars](https://img.shields.io/github/stars/matusHubinsky/behe-vty)](https://github.com/matusHubinsky/behe-vty/stargazers)
+[![downloads](https://img.shields.io/github/downloads/matusHubinsky/behe-vty/total)](https://github.com/matusHubinsky/behe-vty/releases)
+[![license](https://img.shields.io/github/license/matusHubinsky/behe-vty)](LICENSE.md)
 
 ![alt text](assets/image-001.png)
 
